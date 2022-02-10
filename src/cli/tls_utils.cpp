@@ -140,7 +140,7 @@ class TLS_Client_Hello_Reader final : public Command
 
          try
             {
-            Botan::TLS::Client_Hello hello(input);
+            Botan::TLS::Client_Hello_12 hello(input);
 
             output() << format_hello(hello);
             }
