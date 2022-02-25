@@ -68,9 +68,8 @@ class Client_Impl_13 : public Channel_Impl_13
    private:
       void process_handshake_msg(Handshake_Message_13 msg) override;
 
-      void send_client_hello(const std::vector<std::string>& next_protocols = {});
-
       void handle(const Server_Hello_13& server_hello_msg);
+      void handle(const Hello_Retry_Request& hrr_msg);
       void handle(const Encrypted_Extensions& encrypted_extensions_msg);
       void handle(const Certificate_13& certificate_msg);
       void handle(const Certificate_Verify_13& certificate_verify_msg);

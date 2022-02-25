@@ -31,6 +31,19 @@ class BOTAN_TEST_API Transcript_Hash_State
       Transcript_Hash_State(const std::string &algo_spec);
       ~Transcript_Hash_State() = default;
 
+      /**
+       * Recreates a Transcript_Hash_State after receiving a Hello Retry Request.
+       * Note that the `prev_transcript_hash_state` must not have an hash algorithm
+       * set, yet. Furthermore it must contain exactly TWO unprocessed messages:
+       *   * Client Hello 1, and
+       *   * Hello Retry Request
+       * The result of this function is an ordinary transcript hash that can replace
+       * the previously used object in client and server implementations.
+       */
+      static Transcript_Hash_State recreate_after_hello_retry_request(
+                        const std::string& algo_spec,
+                        const Transcript_Hash_State& prev_transcript_hash_state);
+
       Transcript_Hash_State& operator=(const Transcript_Hash_State&) = delete;
 
       Transcript_Hash_State(Transcript_Hash_State&&) = default;
@@ -38,7 +51,16 @@ class BOTAN_TEST_API Transcript_Hash_State
 
       void update(const std::vector<uint8_t>& serialized_message);
 
+      /**
+       * returns the latest transcript hash
+       * (given an algorithm was already specified and some data was provided to `update`)
+       */
       const Transcript_Hash& current() const;
+
+      /**
+       * returns the second-latest transcript hash
+       * throws if no 'current' was ever replaced by a call to `update`
+       */
       const Transcript_Hash& previous() const;
 
       void set_algorithm(const std::string& algo_spec);
@@ -53,7 +75,7 @@ class BOTAN_TEST_API Transcript_Hash_State
 
       // This buffer is filled with the data that is passed into
       // `update()` before `set_algorithm()` was called.
-      std::vector<uint8_t> m_unprocessed_transcript;
+      std::vector<std::vector<uint8_t>> m_unprocessed_transcript;
 
       Transcript_Hash m_current;
       Transcript_Hash m_previous;

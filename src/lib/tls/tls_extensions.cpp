@@ -16,8 +16,16 @@ namespace Botan::TLS {
 
 namespace {
 
-std::unique_ptr<Extension> make_extension(TLS_Data_Reader& reader, uint16_t code, uint16_t size, Connection_Side from)
+std::unique_ptr<Extension> make_extension(TLS_Data_Reader& reader,
+                                          uint16_t code,
+                                          uint16_t size,
+                                          Connection_Side from,
+                                          bool is_hello_retry_request)
    {
+#if !defined (BOTAN_HAS_TLS_13)
+   BOTAN_UNUSED(is_hello_retry_request);
+#endif
+
    switch(code)
       {
       case TLSEXT_SERVER_NAME_INDICATION:
@@ -70,7 +78,7 @@ std::unique_ptr<Extension> make_extension(TLS_Data_Reader& reader, uint16_t code
          return std::make_unique<Signature_Algorithms_Cert>(reader, size);
 
       case TLSEXT_KEY_SHARE:
-         return std::make_unique<Key_Share>(reader, size, from);
+         return std::make_unique<Key_Share>(reader, size, from, is_hello_retry_request);
 #endif
       }
 
@@ -91,7 +99,7 @@ void Extensions::add(std::unique_ptr<Extension> extn)
    m_extensions.emplace_back(std::move(extn.release()));
    }
 
-void Extensions::deserialize(TLS_Data_Reader& reader, Connection_Side from)
+void Extensions::deserialize(TLS_Data_Reader& reader, Connection_Side from, bool is_hello_retry_request)
    {
    if(reader.has_remaining())
       {
@@ -111,7 +119,7 @@ void Extensions::deserialize(TLS_Data_Reader& reader, Connection_Side from)
             throw TLS_Exception(TLS::Alert::DECODE_ERROR,
                                 "Peer sent duplicated extensions");
 
-         this->add(make_extension(reader, extension_code, extension_size, from));
+         this->add(make_extension(reader, extension_code, extension_size, from, is_hello_retry_request));
          }
       }
    }
@@ -317,6 +325,11 @@ std::vector<uint8_t> Application_Layer_Protocol_Notification::serialize(Connecti
 
 Supported_Groups::Supported_Groups(const std::vector<Group_Params>& groups) : m_groups(groups)
    {
+   }
+
+const std::vector<Group_Params>& Supported_Groups::groups() const
+   {
+   return m_groups;
    }
 
 std::vector<Group_Params> Supported_Groups::ec_groups() const

@@ -24,8 +24,12 @@ namespace Internal {
 class BOTAN_TEST_API Handshake_State_13_Base
    {
    public:
-      const Client_Hello_13&       client_hello() const { return get(m_client_hello); }
+      bool has_hello_retry_request() const { return m_hello_retry_request.has_value(); }
+
+      // Client_Hello_13 cannot be const because it might need modification due to a Hello_Retry_Request
+      Client_Hello_13&       client_hello() { return get(m_client_hello); }
       const Server_Hello_13&       server_hello() const { return get(m_server_hello); }
+      const Hello_Retry_Request&   hello_retry_request() const { return get(m_hello_retry_request); }
       const Encrypted_Extensions&  encrypted_extensions() const { return get(m_encrypted_extensions); }
       const Certificate_13&        certificate() const { return get(m_server_certs); }
       const Certificate_Verify_13& certificate_verify() const { return get(m_server_verify); }
@@ -37,6 +41,7 @@ class BOTAN_TEST_API Handshake_State_13_Base
 
       Client_Hello_13&       store(Client_Hello_13 client_hello, const bool from_peer);
       Server_Hello_13&       store(Server_Hello_13 server_hello, const bool from_peer);
+      Hello_Retry_Request&   store(Hello_Retry_Request hello_retry_request, const bool from_peer);
       Encrypted_Extensions&  store(Encrypted_Extensions encrypted_extensions, const bool from_peer);
       Certificate_13&        store(Certificate_13 certificate, const bool from_peer);
       Certificate_Verify_13& store(Certificate_Verify_13 certificate_verify, const bool from_peer);
@@ -53,10 +58,19 @@ class BOTAN_TEST_API Handshake_State_13_Base
          return opt.value();
          }
 
+      template<typename MessageT>
+      MessageT& get(std::optional<MessageT>& opt)
+         {
+         if(!opt.has_value())
+            { throw Invalid_State("TLS handshake message not set"); }
+         return opt.value();
+         }
+
       Connection_Side m_side;
 
       std::optional<Client_Hello_13> m_client_hello;
       std::optional<Server_Hello_13> m_server_hello;
+      std::optional<Hello_Retry_Request> m_hello_retry_request;
       std::optional<Encrypted_Extensions> m_encrypted_extensions;
       std::optional<Certificate_13> m_server_certs;
       std::optional<Certificate_Verify_13> m_server_verify;
@@ -90,7 +104,7 @@ class BOTAN_TEST_API Handshake_State_13 : public Internal::Handshake_State_13_Ba
          {
          return std::visit([&](auto msg) -> Handshake_Message_13_Ref
             {
-            return store(std::move(msg), false);
+            return std::reference_wrapper<decltype(msg)>(store(std::move(msg), false));
             }, std::move(message));
          }
 
@@ -100,7 +114,7 @@ class BOTAN_TEST_API Handshake_State_13 : public Internal::Handshake_State_13_Ba
             {
             if constexpr(std::is_constructible_v<Inbound_Message_T, decltype(msg)>)
                {
-               return store(std::move(msg), true);
+               return std::reference_wrapper<decltype(msg)>(store(std::move(msg), true));
                }
 
             throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "received an illegal handshake message");

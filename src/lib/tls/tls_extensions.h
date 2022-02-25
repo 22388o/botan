@@ -239,6 +239,7 @@ class BOTAN_UNSTABLE_API Supported_Groups final : public Extension
 
       Handshake_Extension_Type type() const override { return static_type(); }
 
+      const std::vector<Group_Params>& groups() const;
       std::vector<Group_Params> ec_groups() const;
       std::vector<Group_Params> dh_groups() const;
 
@@ -451,7 +452,7 @@ class BOTAN_UNSTABLE_API Supported_Versions final : public Extension
 
       bool supports(Protocol_Version version) const;
 
-      const std::vector<Protocol_Version> versions() const { return m_versions; }
+      const std::vector<Protocol_Version>& versions() const { return m_versions; }
    private:
       std::vector<Protocol_Version> m_versions;
    };
@@ -581,6 +582,24 @@ class Key_Share_Content
          {
          throw Invalid_Argument("get_singleton_entry should only be called on Key_Share_ServerHello");
          }
+
+      virtual Named_Group get_selected_group() const
+         {
+         throw Invalid_Argument("get_selected_group should only be called on Key_Share_HelloRetryRequest");
+         }
+
+      /**
+       * Update the Client_Hello's KeyShare to comply with a HelloRetryRequest
+       *
+       * This method should only be called on a Key_Share_ClientHello that was
+       * previously sent to the server. If the selected group was already
+       * offered in the first flight (within m_client_shares) this method will
+       * throw.
+       */
+      virtual void retry_offer(const TLS::Named_Group, Callbacks&, RandomNumberGenerator &)
+         {
+         throw Invalid_Argument("retry_offer should only be called on Key_Share_ClientHello");
+         }
    };
 
 /**
@@ -601,9 +620,12 @@ class BOTAN_UNSTABLE_API Key_Share final : public Extension
       // TODO: this will only work as client_keyshare.exchange(server_keyshare) for now
       secure_vector<uint8_t> exchange(const Key_Share* peer_keyshare, const Policy& policy, Callbacks& cb, RandomNumberGenerator& rng) const;
 
+      void retry_offer(const Key_Share* retry_request_keyshare, const std::vector<Named_Group>& supported_groups, Callbacks& cb, RandomNumberGenerator& rng);
+
       explicit Key_Share(TLS_Data_Reader& reader,
                          uint16_t extension_size,
-                         Connection_Side from);
+                         Connection_Side from,
+                         bool is_hello_retry_request);
 
       // constuctor used for ClientHello msg
       explicit Key_Share(const Policy& policy, Callbacks& cb, RandomNumberGenerator& rng);
@@ -691,7 +713,9 @@ class BOTAN_UNSTABLE_API Extensions final
 
       std::vector<uint8_t> serialize(Connection_Side whoami) const;
 
-      void deserialize(TLS_Data_Reader& reader, Connection_Side from);
+      void deserialize(TLS_Data_Reader& reader,
+                       Connection_Side from,
+                       bool is_hello_retry_request = false);
 
       /**
        * Take the extension with the given type out of the extensions list.

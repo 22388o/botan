@@ -14,9 +14,7 @@
 
 #include <botan/credentials_manager.h>
 
-namespace Botan {
-
-namespace TLS {
+namespace Botan::TLS {
 
 Client_Impl_13::Client_Impl_13(Callbacks& callbacks,
                                Session_Manager& session_manager,
@@ -32,7 +30,17 @@ Client_Impl_13::Client_Impl_13(Callbacks& callbacks,
    m_info(info)
    {
    BOTAN_UNUSED(m_creds, offer_version); // TODO: fixme
-   send_client_hello(next_protocols);
+
+   Client_Hello::Settings client_settings(TLS::Protocol_Version::TLS_V13, m_info.hostname());
+   send_handshake_message(m_handshake_state.sent(Client_Hello_13(
+                             policy,
+                             callbacks,
+                             rng,
+                             std::vector<uint8_t>(),
+                             client_settings,
+                             next_protocols)));
+
+   m_transitions.set_expected_next({SERVER_HELLO, HELLO_RETRY_REQUEST});
    }
 
 void Client_Impl_13::process_handshake_msg(Handshake_Message_13 message)
@@ -53,79 +61,160 @@ std::vector<Handshake_Type> Client_Impl_13::expected_post_handshake_messages() c
    return { NEW_SESSION_TICKET, KEY_UPDATE };
    }
 
-void Client_Impl_13::handle(const Server_Hello_13& sh)
-{
-   if(sh.legacy_version() != Protocol_Version::TLS_V12)
+namespace  {
+// validate Server_Hello and Hello_Retry_Request
+void validate_server_hello_ish(const Client_Hello_13& ch, const Server_Hello_13& sh)
    {
-      // RFC 8446 4.1.3:
-      //   In TLS 1.3, the TLS server indicates
-      //   its version using the "supported_versions" extension
-      //   (Section 4.2.1), and the legacy_version field MUST be set to
-      //   0x0303, which is the version number for TLS 1.2.
-      throw TLS_Exception(Alert::PROTOCOL_VERSION, "legacy_version must be set to 1.2 in TLS 1.3");
-   }
+   // RFC 8446 4.1.3
+   //    A client which receives a legacy_session_id_echo field that does not match what
+   //    it sent in the ClientHello MUST abort the handshake with an "illegal_parameter" alert.
+   if(ch.session_id() != sh.session_id())
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "echoed session id did not match");
+      }
 
-   if(auto requested = sh.random_signals_downgrade())
-   {
-      if(requested.value() == Protocol_Version::TLS_V11)
-      { throw TLS_Exception(Alert::PROTOCOL_VERSION, "TLS 1.1 is not supported"); }
-      if(requested.value() == Protocol_Version::TLS_V12)
-      { throw Not_Implemented("downgrade is nyi"); }
-   }
-
-   if(sh.random_signals_hello_retry_request())
-   {
-      throw Not_Implemented("hello retry is nyi");
-   }
-
-   if(!m_handshake_state.client_hello().offered_suite(sh.ciphersuite()))
-   {
+   // RFC 8446 4.1.3
+   //    A client which receives a cipher suite that was not offered MUST abort the handshake
+   //    with an "illegal_parameter" alert.
+   if(!ch.offered_suite(sh.ciphersuite()))
+      {
       throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Ciphersuite was not offered");
+      }
+
+   // RFC 8446 4.2.1
+   //    If the "supported_versions" extension in the ServerHello contains a
+   //    version not offered by the client or contains a version prior to
+   //    TLS 1.3, the client MUST abort the handshake with an "illegal_parameter" alert.
+   BOTAN_ASSERT_NOMSG(ch.extensions().has<Supported_Versions>());
+   if(!ch.extensions().get<Supported_Versions>()->supports(sh.selected_version()))
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol_Version was not offered");
+      }
+
+   // RFC 8446 4.1.4.
+   //    A HelloRetryRequest MUST NOT contain any
+   //    extensions that were not first offered by the client in its
+   //    ClientHello, with the exception of optionally the "cookie".
+   for(auto ext_type : sh.extensions().extension_types())
+      {
+      if(ext_type != TLSEXT_COOKIE && ch.extensions().extension_types().count(ext_type) == 0)
+         {
+         throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION, "extension was not offered");
+         }
+      }
    }
+}
+
+void Client_Impl_13::handle(const Server_Hello_13& sh)
+   {
+   // Note: Basic checks (that do not require contextual information) were already
+   //       performed during the construction of the Server_Hello_13 object.
+
+   const auto& ch = m_handshake_state.client_hello();
+
+   // TODO: have another close look at this once we start implementing
+   //       protocol downgrade!
+   if(auto requested = sh.random_signals_downgrade())
+      {
+      if(requested.value() == Protocol_Version::TLS_V11)
+         { throw TLS_Exception(Alert::PROTOCOL_VERSION, "TLS 1.1 is not supported"); }
+      if(requested.value() == Protocol_Version::TLS_V12)
+         { throw Not_Implemented("downgrade is nyi"); }
+      }
+
+   validate_server_hello_ish(ch, sh);
+
+   if(m_handshake_state.has_hello_retry_request())
+      {
+      const auto& hrr = m_handshake_state.hello_retry_request();
+
+      // RFC 8446 4.1.4
+      //    Upon receiving the ServerHello, clients MUST check that the cipher suite
+      //    supplied in the ServerHello is the same as that in the HelloRetryRequest
+      //    and otherwise abort the handshake with an "illegal_parameter" alert.
+      if(hrr.ciphersuite() != sh.ciphersuite())
+         {
+         throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "server changed its chosen ciphersuite");
+         }
+
+      // RFC 8446 4.1.4
+      //    The value of selected_version in the HelloRetryRequest "supported_versions"
+      //    extension MUST be retained in the ServerHello, and a client MUST abort the
+      //    handshake with an "illegal_parameter" alert if the value changes.
+      if(hrr.selected_version() != sh.selected_version())
+         {
+         throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "server changed its chosen protocol version");
+         }
+      }
 
    auto cipher = Ciphersuite::by_id(sh.ciphersuite());
    BOTAN_ASSERT_NOMSG(cipher.has_value());  // should work, since we offered this suite
 
    if(!sh.extensions().has<Key_Share>())
-   {
-      // TODO
-      throw Unexpected_Message("keyshare ext not found!");
-   }
+      {
+      throw Not_Implemented("PSK mode (without key agreement) is NYI");
+      }
 
-   BOTAN_ASSERT_NOMSG(m_handshake_state.client_hello().extensions().has<Key_Share>());
-   auto my_keyshare = m_handshake_state.client_hello().extensions().get<Key_Share>();
+   // TODO: this is assuming a standard handshake without any PSK mode!
+   BOTAN_ASSERT_NOMSG(ch.extensions().has<Key_Share>());
+   auto my_keyshare = ch.extensions().get<Key_Share>();
    auto shared_secret = my_keyshare->exchange(sh.extensions().get<Key_Share>(), policy(), callbacks(), rng());
 
    m_transcript_hash.set_algorithm(cipher.value().prf_algo());
 
    m_cipher_state = Cipher_State::init_with_server_hello(m_side,
-         std::move(shared_secret),
-         cipher.value(),
-         m_transcript_hash.current());
+                    std::move(shared_secret),
+                    cipher.value(),
+                    m_transcript_hash.current());
 
    callbacks().tls_examine_extensions(m_handshake_state.server_hello().extensions(), SERVER);
 
    m_transitions.set_expected_next(ENCRYPTED_EXTENSIONS);
-}
+   }
+
+void Client_Impl_13::handle(const Hello_Retry_Request& hrr)
+   {
+   // Note: Basic checks (that do not require contextual information) were already
+   //       performed during the construction of the Hello_Retry_Request object as
+   //       a subclass of Server_Hello_13.
+
+   auto& ch = m_handshake_state.client_hello();
+
+   validate_server_hello_ish(ch, hrr);
+
+   auto cipher = Ciphersuite::by_id(hrr.ciphersuite());
+   BOTAN_ASSERT_NOMSG(cipher.has_value());  // should work, since we offered this suite
+
+   m_transcript_hash = Transcript_Hash_State::recreate_after_hello_retry_request(cipher.value().prf_algo(), m_transcript_hash);
+
+   ch.retry(hrr, callbacks(), rng());
+
+   send_handshake_message(ch);
+
+   // RFC 8446 4.1.4
+   //    If a client receives a second HelloRetryRequest in the same connection [...],
+   //    it MUST abort the handshake with an "unexpected_message" alert.
+   m_transitions.set_expected_next(SERVER_HELLO);
+   }
 
 void Client_Impl_13::handle(const Encrypted_Extensions& encrypted_extensions_msg)
    {
-      // TODO: check all extensions are allowed and expected
+   // TODO: check all extensions are allowed and expected
 
-      // Note: As per RFC 6066 3. we can check for an empty SNI extensions to
-      // determine if the server used the SNI we sent here.
+   // Note: As per RFC 6066 3. we can check for an empty SNI extensions to
+   // determine if the server used the SNI we sent here.
 
-      callbacks().tls_examine_extensions(encrypted_extensions_msg.extensions(), SERVER);
+   callbacks().tls_examine_extensions(encrypted_extensions_msg.extensions(), SERVER);
 
-      bool psk_mode = false;  // TODO
-      if(psk_mode)
-         {
-         m_transitions.set_expected_next(FINISHED);
-         }
-      else
-         {
-         m_transitions.set_expected_next({CERTIFICATE, CERTIFICATE_REQUEST});
-         }
+   bool psk_mode = false;  // TODO
+   if(psk_mode)
+      {
+      m_transitions.set_expected_next(FINISHED);
+      }
+   else
+      {
+      m_transitions.set_expected_next({CERTIFICATE, CERTIFICATE_REQUEST});
+      }
    }
 
 void Client_Impl_13::handle(const Certificate_13& certificate_msg)
@@ -158,13 +247,13 @@ void Client_Impl_13::handle(const Certificate_13& certificate_msg)
 void Client_Impl_13::handle(const Certificate_Verify_13& certificate_verify_msg)
    {
    bool sig_valid = certificate_verify_msg.verify(
-      m_handshake_state.certificate().cert_chain().front().certificate,
-      m_handshake_state.client_hello().signature_schemes(),
-      callbacks(),
-      m_transcript_hash.previous());
+                       m_handshake_state.certificate().cert_chain().front().certificate,
+                       m_handshake_state.client_hello().signature_schemes(),
+                       callbacks(),
+                       m_transcript_hash.previous());
 
    if(!sig_valid)
-      throw TLS_Exception(Alert::DECRYPT_ERROR, "Server certificate verification failed");
+      { throw TLS_Exception(Alert::DECRYPT_ERROR, "Server certificate verification failed"); }
 
    m_transitions.set_expected_next(FINISHED);
    }
@@ -181,7 +270,7 @@ void Client_Impl_13::handle(const Finished_13& finished_msg)
 
    // send client finished handshake message (still using handshake traffic secrets)
    send_handshake_message(m_handshake_state.sent(Finished_13(m_cipher_state.get(),
-                                                             m_transcript_hash.current())));
+                          m_transcript_hash.current())));
 
    // derives the application traffic secrets and _replaces_ the handshake traffic secrets
    // Note: this MUST happen AFTER the client finished message was sent!
@@ -194,22 +283,6 @@ void Client_Impl_13::handle(const Finished_13& finished_msg)
 
    m_transitions.set_expected_next(expected_post_handshake_messages());
    }
-
-void Client_Impl_13::send_client_hello(const std::vector<std::string>& next_protocols)
-   {
-   Client_Hello::Settings client_settings(TLS::Protocol_Version::TLS_V13, m_info.hostname());
-   send_handshake_message(m_handshake_state.sent(Client_Hello_13(
-                             policy(),
-                             callbacks(),
-                             rng(),
-                             std::vector<uint8_t>(),
-                             client_settings,
-                             next_protocols)));
-
-   m_transitions.set_expected_next(SERVER_HELLO);
-   }
-
-}
 
 void TLS::Client_Impl_13::handle(const New_Session_Ticket_13&)
    {

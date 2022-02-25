@@ -66,6 +66,9 @@ uint32_t bitmask_for_handshake_type(Handshake_Type type)
       case KEY_UPDATE:            // RFC 8446
          return (1 << 17);
 
+      case HELLO_RETRY_REQUEST:   // RFC 8446
+         return (1 << 18);
+
       // allow explicitly disabling new handshakes
       case HANDSHAKE_NONE:
          return 0;

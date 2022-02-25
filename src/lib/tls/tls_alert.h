@@ -50,6 +50,7 @@ class BOTAN_PUBLIC_API(2,0) Alert final
          INAPPROPRIATE_FALLBACK          = 86,
          USER_CANCELED                   = 90,
          NO_RENEGOTIATION                = 100,
+         MISSING_EXTENSION               = 109, // RFC 8446
          UNSUPPORTED_EXTENSION           = 110,
          CERTIFICATE_UNOBTAINABLE        = 111,
          UNRECOGNIZED_NAME               = 112,

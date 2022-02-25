@@ -39,6 +39,7 @@ namespace TLS {
 class Session;
 class Handshake_IO;
 class Handshake_State;
+class Hello_Retry_Request;
 class Callbacks;
 class Cipher_State;
 
@@ -230,6 +231,10 @@ class BOTAN_UNSTABLE_API Client_Hello_13 final : public Client_Hello
                       const std::vector<std::string>& next_protocols);
 
 
+      void retry(const Hello_Retry_Request& hrr,
+                 Callbacks& cb,
+                 RandomNumberGenerator& rng);
+
       std::vector<Protocol_Version> supported_versions() const;
    };
 
@@ -247,11 +252,12 @@ class BOTAN_UNSTABLE_API Server_Hello : public Handshake_Message
 
       // methods available in both subclasses' interface
       uint16_t ciphersuite() const;
-      Protocol_Version legacy_version() const;
       const Extensions& extensions() const;
+      const std::vector<uint8_t>& session_id() const;
 
    protected:
-      explicit Server_Hello(const std::vector<uint8_t>& buf);
+      explicit Server_Hello(const std::vector<uint8_t>& buf,
+                            const bool is_hello_retry_request = false);
 
       Server_Hello(Protocol_Version legacy_version,
                    std::vector<uint8_t> session_id,
@@ -265,10 +271,10 @@ class BOTAN_UNSTABLE_API Server_Hello : public Handshake_Message
          m_comp_method(comp_method) {}
 
       // methods used internally and potentially exposed by one of the subclasses
-      const std::vector<uint8_t>& session_id() const;
       std::set<Handshake_Extension_Type> extension_types() const;
       const std::vector<uint8_t>& random() const;
       uint8_t compression_method() const;
+      Protocol_Version legacy_version() const;
 
    protected:
       Protocol_Version m_legacy_version;
@@ -333,7 +339,7 @@ class BOTAN_UNSTABLE_API Server_Hello_12 final : public Server_Hello
       using Server_Hello::random;
       using Server_Hello::compression_method;
       using Server_Hello::extension_types;
-      using Server_Hello::session_id;
+      using Server_Hello::legacy_version;
 
       bool secure_renegotiation() const;
 
@@ -360,22 +366,41 @@ class BOTAN_UNSTABLE_API Server_Hello_12 final : public Server_Hello
 
 #if defined(BOTAN_HAS_TLS_13)
 
-class BOTAN_UNSTABLE_API Server_Hello_13 final : public Server_Hello
+class Hello_Retry_Request;
+
+class BOTAN_UNSTABLE_API Server_Hello_13 : public Server_Hello
    {
+   protected:
+      /// Server_Hello_13 parsing might come out as a Hello_Retry_Request, hence
+      /// parsing of both messages is funneled through the `parse` factory method.
+      Server_Hello_13(const std::vector<uint8_t>& buf,
+                      const bool is_hello_retry_request = false);
+
    public:
-      explicit Server_Hello_13(const std::vector<uint8_t>& buf) : Server_Hello(buf)
-         {
-         // TODO: validation, e.g. compression method
-         }
+      static std::variant<Hello_Retry_Request, Server_Hello_13>
+      parse(const std::vector<uint8_t>& buf);
 
       /**
        * Return desired downgrade version indicated by hello random, if any.
        */
       std::optional<Protocol_Version> random_signals_downgrade() const;
 
-      bool random_signals_hello_retry_request() const;
+      Protocol_Version selected_version() const;
+   };
 
-      std::vector<Protocol_Version> supported_versions() const;
+class BOTAN_UNSTABLE_API Hello_Retry_Request final : public Server_Hello_13
+   {
+   protected:
+      friend class Server_Hello_13;  // to allow construction by Server_Hello_13::parse()
+      Hello_Retry_Request(const std::vector<uint8_t>& buf)
+         : Server_Hello_13(buf, true)
+         {
+         // TODO: validation, e.g. compression method
+         }
+
+   public:
+      Handshake_Type type() const override { return HELLO_RETRY_REQUEST; }
+      Handshake_Type wire_type() const override { return SERVER_HELLO; }
    };
 
 #endif // BOTAN_HAS_TLS_13
@@ -654,7 +679,7 @@ class BOTAN_UNSTABLE_API Finished : public Handshake_Message
       std::vector<uint8_t> serialize() const override;
 
    protected:
-      Finished() = default;
+      using Handshake_Message::Handshake_Message;
       std::vector<uint8_t> m_verification_data;
    };
 
@@ -806,7 +831,7 @@ class BOTAN_UNSTABLE_API New_Session_Ticket_13 final : public Handshake_Message
 
    private:
 
-   // TODO: implement this message fully
+      // TODO: implement this message fully
    };
 
 #endif
@@ -845,7 +870,7 @@ using as_wrapped_references_t = typename as_wrapped_references<T>::type;
 using Handshake_Message_13 = std::variant<
                              Client_Hello_13,
                              Server_Hello_13,
-                             // Hello_Retry_Request ?
+                             Hello_Retry_Request,
                              // End_Of_Early_Data,
                              Encrypted_Extensions,
                              Certificate_13,
@@ -862,6 +887,7 @@ using Handshake_Message_13_Ref = as_wrapped_references_t<Handshake_Message_13>;
 
 using Server_Handshake_13_Message = std::variant<
                                     Server_Hello_13,
+                                    Hello_Retry_Request,
                                     Encrypted_Extensions,
                                     Certificate_13,
                                     Certificate_Verify_13,

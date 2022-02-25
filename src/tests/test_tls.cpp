@@ -286,6 +286,7 @@ class Test_TLS_Alert_Strings : public Test
                Botan::TLS::Alert::INAPPROPRIATE_FALLBACK,
                Botan::TLS::Alert::USER_CANCELED,
                Botan::TLS::Alert::NO_RENEGOTIATION,
+               Botan::TLS::Alert::MISSING_EXTENSION,
                Botan::TLS::Alert::UNSUPPORTED_EXTENSION,
                Botan::TLS::Alert::CERTIFICATE_UNOBTAINABLE,
                Botan::TLS::Alert::UNRECOGNIZED_NAME,

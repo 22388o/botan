@@ -132,6 +132,32 @@ const auto client_finished_message = Botan::hex_decode(
                                         "14 00 00 20 a8 ec 43 6d 67 76 34 ae 52 5a c1"
                                         "fc eb e1 1a 03 9e c1 76 94 fa c6 e9 85 27 b6 42 f2 ed d5 ce 61");
 
+//
+// ###################################################################
+//
+
+const auto hrr_client_hello_msg = Botan::hex_decode(
+      "01 00 00 b0 03 03 b0 b1 c5 a5 aa 37 c5"
+      "91 9f 2e d1 d5 c6 ff f7 fc b7 84 97 16 94 5a 2b 8c ee 92 58 a3"
+      "46 67 7b 6f 00 00 06 13 01 13 03 13 02 01 00 00 81 00 00 00 0b"
+      "00 09 00 00 06 73 65 72 76 65 72 ff 01 00 01 00 00 0a 00 08 00"
+      "06 00 1d 00 17 00 18 00 33 00 26 00 24 00 1d 00 20 e8 e8 e3 f3"
+      "b9 3a 25 ed 97 a1 4a 7d ca cb 8a 27 2c 62 88 e5 85 c6 48 4d 05"
+      "26 2f ca d0 62 ad 1f 00 2b 00 03 02 03 04 00 0d 00 20 00 1e 04"
+      "03 05 03 06 03 02 03 08 04 08 05 08 06 04 01 05 01 06 01 02 01"
+      "04 02 05 02 06 02 02 02 00 2d 00 02 01 01 00 1c 00 02 40 01");
+
+const auto hrr_hello_retry_request_msg = Botan::hex_decode(
+      "02 00 00 ac 03 03 cf 21 ad 74 e5 9a 61"
+      "11 be 1d 8c 02 1e 65 b8 91 c2 a2 11 16 7a bb 8c 5e 07 9e 09 e2"
+      "c8 a8 33 9c 00 13 01 00 00 84 00 33 00 02 00 17 00 2c 00 74 00"
+      "72 71 dc d0 4b b8 8b c3 18 91 19 39 8a 00 00 00 00 ee fa fc 76"
+      "c1 46 b8 23 b0 96 f8 aa ca d3 65 dd 00 30 95 3f 4e df 62 56 36"
+      "e5 f2 1b b2 e2 3f cc 65 4b 1b 5b 40 31 8d 10 d1 37 ab cb b8 75"
+      "74 e3 6e 8a 1f 02 5f 7d fa 5d 6e 50 78 1b 5e da 4a a1 5b 0c 8b"
+      "e7 78 25 7d 16 aa 30 30 e9 e7 84 1d d9 e4 c0 34 22 67 e8 ca 0c"
+      "af 57 1f b2 b7 cf f0 f9 34 b0 00 2b 00 02 03 04");
+
 const std::vector<std::vector<uint8_t>> tls_12_only_messages
    {
       {HELLO_REQUEST, 0x00, 0x00, 0x02, 0x42, 0x42},
@@ -252,7 +278,7 @@ std::vector<Test::Result> prepare_message()
 
       CHECK("prepare server hello", [&](auto& result)
          {
-         Server_Hello_13 hello({server_hello_message.cbegin()+4, server_hello_message.cend()});
+         auto hello = std::get<Server_Hello_13>(Server_Hello_13::parse({server_hello_message.cbegin()+4, server_hello_message.cend()}));
          Handshake_Layer hl(Connection_Side::SERVER);
          Transcript_Hash_State th("SHA-256");
          result.test_eq("produces the same message", hl.prepare_message(hello, th), server_hello_message);
@@ -332,11 +358,50 @@ std::vector<Test::Result> full_client_handshake()
       };
    }
 
+std::vector<Test::Result> hello_retry_request_handshake()
+   {
+   Handshake_Layer hl(Connection_Side::CLIENT);
+   Transcript_Hash_State th;
+
+   Text_Policy policy("minimum_rsa_bits = 1024");
+
+   return
+      {
+      CHECK("client hello 1", [&](auto& result)
+         {
+         Client_Hello_13 hello({hrr_client_hello_msg.cbegin()+4, hrr_client_hello_msg.cend()});
+         hl.prepare_message(hello, th);
+         check_transcript_hash_empty(result, th);
+         }),
+
+      CHECK("hello retry request", [&](auto& result)
+         {
+         hl.copy_data(hrr_hello_retry_request_msg);
+
+         const auto hrr = hl.next_message(policy, th);
+         result.confirm("is a Hello Retry Request", has_message<Hello_Retry_Request>(result, hrr));
+
+         // we now know the algorithm from the Hello Retry Request
+         // which will not change with the future Server Hello anymore (RFC 8446 4.1.4)
+         th = Transcript_Hash_State::recreate_after_hello_retry_request("SHA-256", th);
+
+         check_transcript_hash_filled(result, th);
+
+         const auto expected_after_hello_retry_request = Botan::hex_decode(
+                  "74EEC04D09C926E86C0647C37BA4DC18D277EEC3337E4608C4D829B77E2FD2B3");
+
+         result.test_eq("correct transcript hash produced after hello retry request", th.current(), expected_after_hello_retry_request);
+         }),
+
+      // ... the rest of the handshake will work just like in full_client_handshake
+      };
+   }
+
 }  // namespace
 
 namespace Botan_Tests {
 BOTAN_REGISTER_TEST_FN("tls", "tls_handshake_layer_13",
-                       read_handshake_messages, prepare_message, full_client_handshake);
+                       read_handshake_messages, prepare_message, full_client_handshake, hello_retry_request_handshake);
 }
 
 #endif

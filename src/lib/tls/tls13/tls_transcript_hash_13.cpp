@@ -22,6 +22,42 @@ Transcript_Hash_State::Transcript_Hash_State(const Transcript_Hash_State& other)
    , m_previous(other.m_previous)
    {}
 
+
+Transcript_Hash_State Transcript_Hash_State::recreate_after_hello_retry_request(
+                                          const std::string& algo_spec,
+                                          const Transcript_Hash_State& prev_transcript_hash_state)
+   {
+   // make sure that we have seen exactly 'client_hello' and 'hello_retry_request'
+   // before re-creating the transcript hash state
+   BOTAN_STATE_CHECK(prev_transcript_hash_state.m_hash == nullptr);
+   BOTAN_STATE_CHECK(prev_transcript_hash_state.m_unprocessed_transcript.size() == 2);
+
+   Transcript_Hash_State ths(algo_spec);
+
+   const auto& client_hello_1      = prev_transcript_hash_state.m_unprocessed_transcript.front();
+   const auto& hello_retry_request = prev_transcript_hash_state.m_unprocessed_transcript.back();
+
+   const size_t hash_length = ths.m_hash->output_length();
+   BOTAN_ASSERT_NOMSG(hash_length < 256);
+
+   // RFC 8446 4.4.1
+   //    [...], when the server responds to a ClientHello with a HelloRetryRequest,
+   //    the value of ClientHello1 is replaced with a special synthetic handshake
+   //    message of handshake type "message_hash" [(0xFE)] containing:
+   std::vector<uint8_t> message_hash;
+   message_hash.reserve(4 + hash_length);
+   message_hash.push_back(0xFE /* message type 'message_hash' RFC 8446 4. */);
+   message_hash.push_back(0x00);
+   message_hash.push_back(0x00);
+   message_hash.push_back(static_cast<uint8_t>(hash_length));
+   message_hash += ths.m_hash->process(client_hello_1);
+
+   ths.update(message_hash);
+   ths.update(hello_retry_request);
+
+   return ths;
+   }
+
 void Transcript_Hash_State::update(const std::vector<uint8_t>& serialized_message)
    {
    if(m_hash != nullptr)
@@ -34,9 +70,7 @@ void Transcript_Hash_State::update(const std::vector<uint8_t>& serialized_messag
       }
    else
       {
-      m_unprocessed_transcript.insert(m_unprocessed_transcript.end(),
-                                      serialized_message.cbegin(),
-                                      serialized_message.cend());
+      m_unprocessed_transcript.push_back(serialized_message);
       }
    }
 
@@ -59,11 +93,11 @@ void Transcript_Hash_State::set_algorithm(const std::string& algo_spec)
       return;
 
    m_hash = HashFunction::create_or_throw(algo_spec);
-   if(!m_unprocessed_transcript.empty())
+   for(const auto& msg : m_unprocessed_transcript)
       {
-      update(m_unprocessed_transcript);
-      m_unprocessed_transcript.clear();
+      update(msg);
       }
+   m_unprocessed_transcript.clear();
    }
 
 Transcript_Hash_State Transcript_Hash_State::clone() const

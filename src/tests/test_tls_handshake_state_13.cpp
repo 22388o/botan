@@ -121,7 +121,7 @@ std::vector<Test::Result> handshake_message_filtering()
          {
          Client_Handshake_State_13 state;
 
-         Server_Hello_13 server_hello(server_hello_message);
+         auto server_hello = std::get<Server_Hello_13>(Server_Hello_13::parse(server_hello_message));
 
          auto filtered = state.received(std::move(server_hello));
          result.confirm("client can receive server hello",

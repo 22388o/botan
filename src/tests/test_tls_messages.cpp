@@ -382,7 +382,8 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                   }
                else if (extension == "key_share_HRR")
                   {
-                  Botan::TLS::Key_Share key_share(Botan::TLS::Group_Params::SECP384R1);
+                  Botan::TLS::TLS_Data_Reader tls_data_reader("HelloRetryRequest", buffer);
+                  Botan::TLS::Key_Share key_share(tls_data_reader, buffer.size(), Botan::TLS::Connection_Side::SERVER, true /* is_hello_retry_request */);
 
                   const auto serialized_buffer = key_share.serialize(Botan::TLS::Connection_Side::CLIENT);
                   const auto expected_key_share = vars.get_req_bin("Expected_Content");
@@ -392,7 +393,7 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                else if (extension == "key_share_SH")
                   {
                   Botan::TLS::TLS_Data_Reader tls_data_reader("ServerHello", buffer);
-                  Botan::TLS::Key_Share key_share(tls_data_reader, buffer.size(), Botan::TLS::Connection_Side::SERVER);
+                  Botan::TLS::Key_Share key_share(tls_data_reader, buffer.size(), Botan::TLS::Connection_Side::SERVER, false /* is_hello_retry_request */);
 
                   const auto serialized_buffer = key_share.serialize(Botan::TLS::Connection_Side::CLIENT);
                   const auto expected_key_share = vars.get_req_bin("Expected_Content");
@@ -402,7 +403,7 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                else if (extension == "key_share_CH")
                   {
                   Botan::TLS::TLS_Data_Reader tls_data_reader("ClientHello", buffer);
-                  Botan::TLS::Key_Share key_share(tls_data_reader, buffer.size(), Botan::TLS::Connection_Side::CLIENT);
+                  Botan::TLS::Key_Share key_share(tls_data_reader, buffer.size(), Botan::TLS::Connection_Side::CLIENT, false /* is_hello_retry_request */);
 
                   const auto serialized_buffer = key_share.serialize(Botan::TLS::Connection_Side::SERVER);
                   const auto expected_key_share = vars.get_req_bin("Expected_Content");

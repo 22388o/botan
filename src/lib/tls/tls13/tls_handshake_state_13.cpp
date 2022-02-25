@@ -22,6 +22,12 @@ Server_Hello_13& Handshake_State_13_Base::store(Server_Hello_13 server_hello, co
     return m_server_hello.value();
 }
 
+Hello_Retry_Request& Handshake_State_13_Base::store(Hello_Retry_Request hello_retry_request, const bool)
+{
+    m_hello_retry_request = std::move(hello_retry_request);
+    return m_hello_retry_request.value();
+}
+
 Encrypted_Extensions& Handshake_State_13_Base::store(Encrypted_Extensions encrypted_extensions, const bool)
 {
     m_encrypted_extensions = std::move(encrypted_extensions);

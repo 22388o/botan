@@ -83,7 +83,8 @@ enum Handshake_Type {
 
    KEY_UPDATE           = 24,  // RFC 8446 (TLS 1.3)
 
-   HANDSHAKE_CCS        = 254, // Not a wire value
+   HELLO_RETRY_REQUEST  = 253, // Not a wire value (HRR appears as an ordinary Server Hello)
+   HANDSHAKE_CCS        = 254, // Not a wire value (TLS 1.3 uses this value for 'message_hash' -- RFC 8446 4.4.1)
    HANDSHAKE_NONE       = 255  // Null value
 };
 

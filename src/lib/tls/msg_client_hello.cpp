@@ -523,8 +523,6 @@ Client_Hello_13::Client_Hello_13(const Policy& policy,
 
    m_extensions.add(new Supported_Groups(policy.key_exchange_groups()));
 
-   m_extensions.add(new Session_Ticket());
-
    m_extensions.add(new Key_Share(policy, cb, rng));
 
    m_extensions.add(new Supported_Versions(client_settings.protocol_version(), policy));
@@ -539,10 +537,35 @@ Client_Hello_13::Client_Hello_13(const Policy& policy,
       m_extensions.add(new Record_Size_Limit(policy.record_size_limit().value()));
       }
 
-
    cb.tls_modify_extensions(m_extensions, CLIENT);
+   }
 
-   // hash.update(io.send(*this));
+void Client_Hello_13::retry(const Hello_Retry_Request& hrr,
+                            Callbacks& cb,
+                            RandomNumberGenerator& rng)
+   {
+   BOTAN_STATE_CHECK(m_extensions.has<Supported_Groups>());
+   BOTAN_STATE_CHECK(m_extensions.has<Key_Share>());
+   BOTAN_STATE_CHECK(hrr.extensions().has<Key_Share>());
+
+   auto hrr_ks = hrr.extensions().get<Key_Share>();
+   const auto& supported_groups = m_extensions.get<Supported_Groups>()->groups();
+
+   m_extensions.get<Key_Share>()->retry_offer(hrr_ks, supported_groups, cb, rng);
+
+   // RFC 8446 4.2.2
+   //    When sending the new ClientHello, the client MUST copy
+   //    the contents of the extension received in the HelloRetryRequest into
+   //    a "cookie" extension in the new ClientHello.
+   if(hrr.extensions().has<Cookie>())
+      {
+      m_extensions.add(new Cookie(hrr.extensions().get<Cookie>()->get_cookie()));
+      }
+
+   // TODO: the consumer of the TLS implementation won't be able to distinguish
+   //       invocations to this callback due to the first Client_Hello or the
+   //       retried Client_Hello after receiving a Hello_Retry_Request.
+   cb.tls_modify_extensions(m_extensions, CLIENT);
    }
 
 #endif // BOTAN_HAS_TLS_13

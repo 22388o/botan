@@ -35,6 +35,9 @@ const char* handshake_type_to_string(Handshake_Type type)
       case SERVER_HELLO:
          return "server_hello";
 
+      case HELLO_RETRY_REQUEST:
+         return "hello_retry_request";
+
       case CERTIFICATE:
          return "certificate";
 

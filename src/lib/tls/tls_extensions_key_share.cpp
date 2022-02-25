@@ -16,7 +16,7 @@
 #include <botan/internal/stl_util.h>
 
 #if defined(BOTAN_HAS_CURVE_25519)
-#include <botan/curve25519.h>
+   #include <botan/curve25519.h>
 #endif
 
 #include <botan/dh.h>
@@ -29,12 +29,12 @@ namespace TLS {
 namespace {
 
 [[maybe_unused]] constexpr bool is_x25519(const Group_Params group)
-{
+   {
    return group == Group_Params::X25519;
-}
+   }
 
 [[maybe_unused]] constexpr bool is_ecdh(const Group_Params group)
-{
+   {
    return
       group == Group_Params::SECP256R1      ||
       group == Group_Params::SECP384R1      ||
@@ -42,17 +42,17 @@ namespace {
       group == Group_Params::BRAINPOOL256R1 ||
       group == Group_Params::BRAINPOOL384R1 ||
       group == Group_Params::BRAINPOOL512R1;
-}
+   }
 
 [[maybe_unused]] constexpr bool is_dh(const Group_Params group)
-{
+   {
    return
       group == Group_Params::FFDHE_2048 ||
       group == Group_Params::FFDHE_3072 ||
       group == Group_Params::FFDHE_4096 ||
       group == Group_Params::FFDHE_6144 ||
       group == Group_Params::FFDHE_8192;
-}
+   }
 
 }
 
@@ -61,31 +61,73 @@ namespace {
 class Key_Share_Entry
    {
    public:
-      Key_Share_Entry(TLS_Data_Reader &reader)
-      {
+      Key_Share_Entry(TLS_Data_Reader& reader)
+         {
          // TODO check that the group actually exists before casting...
          m_group = static_cast<Named_Group>(reader.get_uint16_t());
          const auto key_exchange_length = reader.get_uint16_t();
          m_key_exchange = reader.get_fixed<uint8_t>(key_exchange_length);
-      }
+         }
 
       Key_Share_Entry(Named_Group group, std::vector<uint8_t> key_exchange)
          : m_group(group)
          , m_key_exchange(std::move(key_exchange))
-      {
-         if (m_key_exchange.empty()) {
+         {
+         if(m_key_exchange.empty())
+            {
             throw Decoding_Error("Size of key_exchange in KeyShareEntry must be at least 1 byte.");
+            }
          }
-      }
 
-      Key_Share_Entry(Named_Group group, std::vector<uint8_t> key_exchange, std::unique_ptr<Private_Key> private_key)
+      Key_Share_Entry(const TLS::Group_Params group, Callbacks& cb, RandomNumberGenerator& rng)
          : m_group(group)
-         , m_key_exchange(std::move(key_exchange))
-         , m_private_key(std::move(private_key)) {}
+         {
+         if(is_ecdh(group))
+            {
+            const EC_Group ec_group(cb.tls_decode_group_param(group));
+            auto skey = std::make_unique<ECDH_PrivateKey>(rng, ec_group);
+
+            // RFC 8446 Ch. 4.2.8.2
+            //
+            //   Note: Versions of TLS prior to 1.3 permitted point format
+            //   negotiation; TLS 1.3 removes this feature in favor of a single point
+            //   format for each curve.
+            //
+            // Hence, we neither need to take Policy::use_ecc_point_compression() nor
+            // ClientHello::prefers_compressed_ec_points() into account here.
+            m_key_exchange = skey->public_value(PointGFp::UNCOMPRESSED);
+            m_private_key = std::move(skey);
+            }
+         else if(is_dh(group))
+            {
+            // RFC 8446 Ch. 4.2.8.1
+            //
+            //   The opaque value contains the Diffie-Hellman
+            //   public value (Y = g^X mod p) for the specified group (see [RFC7919]
+            //   for group definitions) encoded as a big-endian integer and padded to
+            //   the left with zeros to the size of p in bytes.
+            auto skey = std::make_unique<DH_PrivateKey>(rng, DL_Group(cb.tls_decode_group_param(group)));
+            m_key_exchange = skey->public_value();
+            m_private_key = std::move(skey);
+#if defined(BOTAN_HAS_CURVE_25519)
+            }
+         else if(is_x25519(group))
+            {
+            auto skey = std::make_unique<X25519_PrivateKey>(rng);
+            m_key_exchange = skey->public_value();
+            m_private_key = std::move(skey);
+#endif
+            }
+         else
+            {
+            throw Decoding_Error("cannot create a key offering without a group definition");
+            }
+         }
 
       bool empty() const { return (m_group == Group_Params::NONE) && m_key_exchange.empty(); }
 
-      std::vector<uint8_t> serialize() const{
+      std::vector<uint8_t> serialize() const
+         {
          std::vector<uint8_t> result;
          result.reserve(m_key_exchange.size() + 2);
 
@@ -95,7 +137,7 @@ class Key_Share_Entry
          append_tls_length_value(result, m_key_exchange, 2);
 
          return result;
-      }
+         }
 
       Named_Group group() const { return m_group; }
 
@@ -105,14 +147,15 @@ class Key_Share_Entry
        * The caller must ensure that both this and `received` have the same group.
        * This method must not be called on Key_Share_Entries without a private key.
        */
-      secure_vector<uint8_t> exchange(const Key_Share_Entry& received, const Policy& policy, Callbacks& cb, RandomNumberGenerator &rng) const
+      secure_vector<uint8_t> exchange(const Key_Share_Entry& received, const Policy& policy, Callbacks& cb,
+                                      RandomNumberGenerator& rng) const
          {
          BOTAN_ASSERT_NOMSG(m_private_key != nullptr);
          BOTAN_ASSERT_NOMSG(m_group == received.m_group);
 
          PK_Key_Agreement ka(*m_private_key, rng, "Raw");
 
-         if (is_ecdh(m_group))
+         if(is_ecdh(m_group))
             {
             const EC_Group ec_group(cb.tls_decode_group_param(m_group));
             ECDH_PublicKey peer_key(ec_group, ec_group.OS2ECP(received.m_key_exchange));
@@ -121,12 +164,12 @@ class Key_Share_Entry
             return ka.derive_key(0, peer_key.public_value()).bits_of();
             }
 
-         if (is_dh(m_group))
+         if(is_dh(m_group))
             {
             const DL_Group dl_group(cb.tls_decode_group_param(m_group));
 
             if(!dl_group.verify_group(rng, false))
-               throw TLS_Exception(Alert::INSUFFICIENT_SECURITY, "DH group validation failed");
+               { throw TLS_Exception(Alert::INSUFFICIENT_SECURITY, "DH group validation failed"); }
 
             DH_PublicKey peer_key(dl_group, BigInt::decode(received.m_key_exchange));
             policy.check_peer_key_acceptable(peer_key);
@@ -167,16 +210,16 @@ class Key_Share_ClientHello final : public Key_Share_Content
    {
    public:
       explicit Key_Share_ClientHello(TLS_Data_Reader& reader, uint16_t /* extension_size */)
-      {
+         {
          const auto client_key_share_length = reader.get_uint16_t();
          const auto read_bytes_so_far_begin = reader.read_so_far();
 
-         while (reader.has_remaining() and ((reader.read_so_far() - read_bytes_so_far_begin) < client_key_share_length))
+         while(reader.has_remaining() and ((reader.read_so_far() - read_bytes_so_far_begin) < client_key_share_length))
             {
             const auto group = reader.get_uint16_t();
             const auto key_exchange_length = reader.get_uint16_t();
 
-            if (key_exchange_length > reader.remaining_bytes())
+            if(key_exchange_length > reader.remaining_bytes())
                {
                throw Decoding_Error("Not enough bytes in the buffer to decode KeyShare (ClientHello) extension");
                }
@@ -184,7 +227,7 @@ class Key_Share_ClientHello final : public Key_Share_Content
             std::vector<uint8_t> client_share;
             client_share.reserve(key_exchange_length);
 
-            for (auto i = 0u; i < key_exchange_length; ++i)
+            for(auto i = 0u; i < key_exchange_length; ++i)
                {
                client_share.push_back(reader.get_byte());
                }
@@ -192,17 +235,17 @@ class Key_Share_ClientHello final : public Key_Share_Content
             m_client_shares.emplace_back(static_cast<Named_Group>(group), client_share);
             }
 
-         if ((reader.read_so_far() - read_bytes_so_far_begin) != client_key_share_length)
+         if((reader.read_so_far() - read_bytes_so_far_begin) != client_key_share_length)
             {
             throw Decoding_Error("Read bytes are not equal client KeyShare length");
             }
-      }
+         }
 
       ~Key_Share_ClientHello() override = default;
 
       static std::unique_ptr<Key_Share_ClientHello>
-      prepare_share_offers(const Policy &policy, Callbacks& cb, RandomNumberGenerator &rng)
-      {
+      prepare_share_offers(const Policy& policy, Callbacks& cb, RandomNumberGenerator& rng)
+         {
          const auto supported = policy.key_exchange_groups();
          const auto offers    = policy.key_exchange_groups_to_offer();
 
@@ -221,76 +264,64 @@ class Key_Share_ClientHello final : public Key_Share_Content
          //     should be used to offer a key exchange. This will satisfy above spec.
          //
          // ... TODO: improve efficiency
-         for (const auto group : supported)
-         {
-            if (std::find(offers.begin(), offers.end(), group) == offers.end()) {
+         for(const auto group : supported)
+            {
+            if(std::find(offers.begin(), offers.end(), group) == offers.end())
+               {
                continue;
+               }
+            kse.emplace_back(group, cb, rng);
             }
-
-            if (is_ecdh(group)) {
-               const EC_Group ec_group(cb.tls_decode_group_param(group));
-               auto skey = std::make_unique<ECDH_PrivateKey>(rng, ec_group);
-
-               // RFC 8446 Ch. 4.2.8.2
-               //
-               //   Note: Versions of TLS prior to 1.3 permitted point format
-               //   negotiation; TLS 1.3 removes this feature in favor of a single point
-               //   format for each curve.
-               //
-               // Hence, we neither need to take Policy::use_ecc_point_compression() nor
-               // ClientHello::prefers_compressed_ec_points() into account here.
-               auto pval = skey->public_value(PointGFp::UNCOMPRESSED);
-               kse.emplace_back(group, std::move(pval), std::move(skey));
-            } else if (is_dh(group)) {
-               // RFC 8446 Ch. 4.2.8.1
-               //
-               //   The opaque value contains the Diffie-Hellman
-               //   public value (Y = g^X mod p) for the specified group (see [RFC7919]
-               //   for group definitions) encoded as a big-endian integer and padded to
-               //   the left with zeros to the size of p in bytes.
-               auto skey = std::make_unique<DH_PrivateKey>(rng, DL_Group(cb.tls_decode_group_param(group)));
-               auto pval = skey->public_value();
-               kse.emplace_back(group, std::move(pval), std::move(skey));
-#if defined(BOTAN_HAS_CURVE_25519)
-            } else if (is_x25519(group)) {
-               auto skey = std::make_unique<X25519_PrivateKey>(rng);
-               auto pval = skey->public_value();
-               kse.emplace_back(group, std::move(pval), std::move(skey));
-#endif
-            } else {
-               throw Decoding_Error("cannot create a key offering without a group definition");
-            }
-         }
 
          return std::unique_ptr<Key_Share_ClientHello>(new Key_Share_ClientHello(std::move(kse)));
-      }
+         }
+
+      void retry_offer(const TLS::Group_Params to_offer, Callbacks& cb, RandomNumberGenerator& rng) override
+         {
+         // RFC 8446 4.2.8
+         //    The selected_group field [MUST] not correspond to a group which was provided
+         //    in the "key_share" extension in the original ClientHello.
+         if(std::find_if(m_client_shares.cbegin(), m_client_shares.cend(),
+         [&](const auto& kse) { return kse.group() == to_offer; }) !=
+         m_client_shares.cend())
+            {
+            throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "group was already offered");
+            }
+
+         m_client_shares.clear();
+         m_client_shares.emplace_back(to_offer, cb, rng);
+         }
 
       std::vector<uint8_t> serialize() const override
-      {
-         std::vector<uint8_t> shares;
-         for (const auto &share : m_client_shares)
          {
+         std::vector<uint8_t> shares;
+         for(const auto& share : m_client_shares)
+            {
             const auto serialized_share = share.serialize();
             shares.insert(shares.end(), serialized_share.cbegin(), serialized_share.cend());
-         }
+            }
 
          std::vector<uint8_t> result;
          append_tls_length_value(result, shares, 2);
          return result;
-      }
+         }
 
       bool empty() const override
-      {
-         return m_client_shares.empty() || std::all_of(m_client_shares.cbegin(), m_client_shares.cend(),
-            [](const Key_Share_Entry& key_share_entry) { return key_share_entry.empty(); });
-      }
+         {
+         // RFC 8446 4.2.8
+         //    Clients MAY send an empty client_shares vector in order to request
+         //    group selection from the server, at the cost of an additional round
+         //    trip [...].
+         return false;
+         }
 
-      secure_vector<uint8_t> exchange(const Key_Share_Content* server_share, const Policy &policy, Callbacks&cb, RandomNumberGenerator &rng) const override
+      secure_vector<uint8_t> exchange(const Key_Share_Content* server_share, const Policy& policy, Callbacks& cb,
+                                      RandomNumberGenerator& rng) const override
          {
          const auto& server_selected = server_share->get_singleton_entry();
 
          auto match = std::find_if(m_client_shares.cbegin(), m_client_shares.cend(),
-            [&server_selected](const auto& offered){ return offered.group() == server_selected.group(); });
+         [&server_selected](const auto& offered) { return offered.group() == server_selected.group(); });
 
          // RFC 8446 4.2.8:
          //   [The KeyShareEntry in the ServerHello] MUST be in the same group
@@ -298,8 +329,8 @@ class Key_Share_ClientHello final : public Key_Share_Content
          //   has selected for the negotiated key exchange.  Servers MUST NOT
          //   send a KeyShareEntry for any group not indicated in the client's
          //   "supported_groups" extension [...]
-         if (!value_exists(policy.key_exchange_groups(), server_selected.group()) ||
-             match == m_client_shares.cend())
+         if(!value_exists(policy.key_exchange_groups(), server_selected.group()) ||
+               match == m_client_shares.cend())
             {
             throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Server selected an unexpected key exchange group.");
             }
@@ -318,16 +349,25 @@ class Key_Share_ClientHello final : public Key_Share_Content
 class Key_Share_ServerHello final : public Key_Share_Content
    {
    public:
-      explicit Key_Share_ServerHello(TLS_Data_Reader& reader,
-                                     uint16_t extension_size);
+      explicit Key_Share_ServerHello(TLS_Data_Reader& reader, uint16_t)
+         : m_server_share(reader) {}
 
       explicit Key_Share_ServerHello(const Key_Share_Entry& server_share);
 
-      ~Key_Share_ServerHello() override;
+      std::vector<uint8_t> serialize() const override
+         {
+         std::vector<uint8_t> buf;
 
-      std::vector<uint8_t> serialize() const override;
+         const auto server_share_serialized = m_server_share.serialize();
+         buf.insert(buf.end(), server_share_serialized.cbegin(), server_share_serialized.cend());
 
-      bool empty() const override;
+         return buf;
+         }
+
+      bool empty() const override
+         {
+         return m_server_share.empty();
+         }
 
       const Key_Share_Entry& get_singleton_entry() const override
          {
@@ -341,100 +381,64 @@ class Key_Share_ServerHello final : public Key_Share_Content
 class Key_Share_HelloRetryRequest final : public Key_Share_Content
    {
    public:
-      [[maybe_unused]] explicit Key_Share_HelloRetryRequest(TLS_Data_Reader& reader,
-                                                            uint16_t extension_size);
+      explicit Key_Share_HelloRetryRequest(TLS_Data_Reader& reader,
+                                           uint16_t extension_size)
+         {
+         constexpr auto sizeof_uint16_t = sizeof(uint16_t);
 
-      explicit Key_Share_HelloRetryRequest(Named_Group selected_group);
+         if(extension_size != sizeof_uint16_t)
+            {
+            throw Decoding_Error("Size of KeyShare extension in HelloRetryRequest must be " +
+                                 std::to_string(sizeof_uint16_t) + " bytes");
+            }
 
-      ~Key_Share_HelloRetryRequest() override;
+         m_selected_group = static_cast<Named_Group>(reader.get_uint16_t());
+         }
 
-      std::vector<uint8_t> serialize() const override;
+      explicit Key_Share_HelloRetryRequest(Named_Group selected_group)
+         : m_selected_group(selected_group) {}
 
-      bool empty() const override;
+      std::vector<uint8_t> serialize() const override
+         {
+         return { get_byte<0>(static_cast<uint16_t>(m_selected_group)),
+                  get_byte<1>(static_cast<uint16_t>(m_selected_group)) };
+         }
+
+      Named_Group get_selected_group() const override
+         {
+         return m_selected_group;
+         }
+
+      bool empty() const override
+         {
+         return m_selected_group == Group_Params::NONE;
+         }
 
    private:
       Named_Group m_selected_group;
    };
 
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-
-
-Key_Share_HelloRetryRequest::Key_Share_HelloRetryRequest(TLS_Data_Reader& reader,
-                                                         uint16_t extension_size)
-   {
-   constexpr auto sizeof_uint16_t = sizeof(uint16_t);
-
-   if (extension_size != sizeof_uint16_t)
-      {
-      throw Decoding_Error("Size of KeyShare extension in HelloRetryRequest must be " +
-         std::to_string(sizeof_uint16_t) + " bytes");
-      }
-
-   m_selected_group = static_cast<Named_Group>(reader.get_uint16_t());
-   }
-
-Key_Share_HelloRetryRequest::Key_Share_HelloRetryRequest(Named_Group selected_group) :
-   m_selected_group(selected_group)
-   {
-   }
-
-Key_Share_HelloRetryRequest::~Key_Share_HelloRetryRequest() = default;
-
-std::vector<uint8_t> Key_Share_HelloRetryRequest::serialize() const
-   {
-   return { get_byte<0>(static_cast<uint16_t>(m_selected_group)),
-            get_byte<1>(static_cast<uint16_t>(m_selected_group)) };
-   }
-
-
-bool Key_Share_HelloRetryRequest::empty() const
-   {
-   return m_selected_group == Group_Params::NONE;
-   }
-
-Key_Share_ServerHello::Key_Share_ServerHello(TLS_Data_Reader& reader,
-                                             uint16_t /*extension_size*/)
-   : m_server_share(reader) {}
-
-Key_Share_ServerHello::~Key_Share_ServerHello() = default;
-
-std::vector<uint8_t> Key_Share_ServerHello::serialize() const
-   {
-   std::vector<uint8_t> buf;
-
-   const auto server_share_serialized = m_server_share.serialize();
-   buf.insert(buf.end(), server_share_serialized.cbegin(), server_share_serialized.cend());
-
-   return buf;
-   }
-
-bool Key_Share_ServerHello::empty() const
-   {
-   return m_server_share.empty();
-   }
-
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
+}  // namespace
 
 Key_Share::Key_Share(TLS_Data_Reader& reader,
                      uint16_t extension_size,
-                     Connection_Side from)
+                     Connection_Side from,
+                     bool is_hello_retry_request)
    {
-   if (from == Connection_Side::CLIENT)
+   BOTAN_ASSERT_IMPLICATION(is_hello_retry_request, from == SERVER,
+                            "only server hello can represent a hello retry request");
+
+   if(from == Connection_Side::CLIENT)
       {
       m_content = std::make_unique<Key_Share_ClientHello>(reader, extension_size);
       }
-   else // Connection_Side::SERVER
+   else if(is_hello_retry_request)  // Connection_Side::SERVER
+      {
+      m_content = std::make_unique<Key_Share_HelloRetryRequest>(reader, extension_size);
+      }
+   else
       {
       m_content = std::make_unique<Key_Share_ServerHello>(reader, extension_size);
-
-      //TODO: When to create Key_Share_HelloRetryRequest? Should be decided later, during implementation of TLS 1.3.
-      // m_content = std::make_unique<Key_Share_HelloRetryRequest>(reader, extension_size);
       }
    }
 
@@ -463,9 +467,25 @@ bool Key_Share::empty() const
    return (m_content == nullptr) || m_content->empty();
    }
 
-secure_vector<uint8_t> Key_Share::exchange(const Key_Share* peer_keyshare, const Policy& policy, Callbacks& cb, RandomNumberGenerator& rng) const
+secure_vector<uint8_t> Key_Share::exchange(const Key_Share* peer_keyshare, const Policy& policy, Callbacks& cb,
+      RandomNumberGenerator& rng) const
    {
    return m_content->exchange(peer_keyshare->m_content.get(), policy, cb, rng);
+   }
+
+void Key_Share::retry_offer(const Key_Share* retry_request_keyshare, const std::vector<Named_Group>& supported_groups,
+                            Callbacks& cb, RandomNumberGenerator& rng)
+   {
+   // RFC 8446 4.2.8
+   //    [T]he selected_group field [MUST correspond] to a group which was provided in
+   //    the "supported_groups" extension in the original ClientHello
+   auto selected = retry_request_keyshare->m_content->get_selected_group();
+   if(!value_exists(supported_groups, selected))
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "group was not advertised as supported");
+      }
+
+   m_content->retry_offer(selected, cb, rng);
    }
 
 #endif

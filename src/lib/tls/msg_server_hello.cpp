@@ -11,8 +11,10 @@
 #include <botan/tls_messages.h>
 
 #include <botan/tls_extensions.h>
+#include <botan/tls_exceptn.h>
 #include <botan/tls_callbacks.h>
 #include <botan/internal/tls_reader.h>
+#include <botan/mem_ops.h>
 #include <botan/internal/tls_session_key.h>
 #include <botan/internal/tls_handshake_io.h>
 #include <botan/internal/tls_handshake_hash.h>
@@ -191,7 +193,8 @@ Server_Hello_12::Server_Hello_12(Handshake_IO& io,
 /*
 * Deserialize a Server Hello message
 */
-Server_Hello::Server_Hello(const std::vector<uint8_t>& buf)
+Server_Hello::Server_Hello(const std::vector<uint8_t>& buf,
+                           const bool is_hello_retry_request)
    {
    if(buf.size() < 38)
       {
@@ -213,7 +216,7 @@ Server_Hello::Server_Hello(const std::vector<uint8_t>& buf)
 
    m_comp_method = reader.get_byte();
 
-   m_extensions.deserialize(reader, Connection_Side::SERVER);
+   m_extensions.deserialize(reader, Connection_Side::SERVER, is_hello_retry_request);
    }
 
 Handshake_Type Server_Hello::type() const
@@ -382,6 +385,92 @@ std::vector<uint8_t> Server_Hello_Done::serialize() const
 
 #if defined(BOTAN_HAS_TLS_13)
 
+
+std::variant<Hello_Retry_Request, Server_Hello_13>
+Server_Hello_13::parse(const std::vector<uint8_t>& buf)
+   {
+   TLS_Data_Reader reader("Server_Hello_13::parse", buf);
+
+   reader.discard_next(2); // legacy version
+
+   // RFC 8446 4.1.3
+   //    Upon receiving a message with type server_hello, implementations MUST
+   //    first examine the Random value and, if it matches this value, process
+   //    it as described in Section 4.1.4 [Hello Retry Request]).
+   const auto random = reader.get_fixed<uint8_t>(32);
+   if(constant_time_compare(random.data(), HELLO_RETRY_REQUEST_MARKER.data(), HELLO_RETRY_REQUEST_MARKER.size()))
+      return Hello_Retry_Request(buf);
+   else
+      return Server_Hello_13(buf);
+   }
+
+Server_Hello_13::Server_Hello_13(const std::vector<uint8_t>& buf,
+                                 const bool is_hello_retry_request)
+   : Server_Hello(buf, is_hello_retry_request)
+   {
+   // Note: checks that cannot be performed without contextual information
+   //       are done in the specific TLS client implementation.
+   // Note: The Supported_Version extension makes sure internally that
+   //       exactly one entry is provided.
+
+   // RFC 8446 4.1.3
+   //    In TLS 1.3, [...] the legacy_version field MUST be set to 0x0303
+   if(legacy_version() != Protocol_Version::TLS_V12)
+      {
+      throw TLS_Exception(Alert::PROTOCOL_VERSION, "legacy_version must be set to 1.2 in TLS 1.3");
+      }
+
+   // RFC 8446 4.1.3
+   //    legacy_compression_method:  A single byte which MUST have the value 0.
+   if(compression_method() != 0x00)
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "compression is not supported in TLS 1.3");
+      }
+
+   const auto& exts = extensions();
+
+   // RFC 8446 4.1.3
+   //    All TLS 1.3 ServerHello messages MUST contain
+   //    the "supported_versions" extension.
+   if(!exts.has<Supported_Versions>())
+      {
+      throw TLS_Exception(Alert::MISSING_EXTENSION,
+                          "server hello did not contain 'supported version' extension");
+      }
+
+   // RFC 8446 4.1.3
+   //    Current ServerHello messages additionally contain
+   //    either the "pre_shared_key" extension or the "key_share"
+   //    extension, or both [...].
+   if(!exts.has<Key_Share>() && !exts.has<PSK_Key_Exchange_Modes>())
+      {
+      throw TLS_Exception(Alert::MISSING_EXTENSION,
+                          "server hello must contain key exchange information");
+      }
+
+   // RFC 8446 4.1.3
+   //    Other extensions (see Section 4.2) are sent
+   //    separately in the EncryptedExtensions message.
+   //
+   // Note that more detailed validation is done in the specific
+   // TLS client implementation.
+   for(const auto& ext : exts.extension_types())
+      {
+      if(ext != TLSEXT_KEY_SHARE &&
+         ext != TLSEXT_PSK_KEY_EXCHANGE_MODES &&
+         ext != TLSEXT_SUPPORTED_VERSIONS &&
+
+         // RFC 8446 4.2.2
+         //     When sending a HelloRetryRequest, the server MAY provide a "cookie"
+         //     extension to the client [...].
+         (is_hello_retry_request && ext != TLSEXT_COOKIE))
+         {
+         throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
+                             "server hello contained an illegal extension");
+         }
+      }
+   }
+
 // TODO: this should have a specific implementation for 1.2/1.3
 std::optional<Protocol_Version> Server_Hello_13::random_signals_downgrade() const
    {
@@ -394,17 +483,13 @@ std::optional<Protocol_Version> Server_Hello_13::random_signals_downgrade() cons
    return std::nullopt;
    }
 
-// TODO: this should have a specific implementation for 1.2/1.3
-bool Server_Hello_13::random_signals_hello_retry_request() const
+Protocol_Version Server_Hello_13::selected_version() const
    {
-   return (m_random.data() == HELLO_RETRY_REQUEST_MARKER.data());
-   }
-
-std::vector<Protocol_Version> Server_Hello_13::supported_versions() const
-   {
-   if(Supported_Versions* versions = m_extensions.get<Supported_Versions>())
-      { return versions->versions(); }
-   return {};
+   const auto versions_ext = m_extensions.get<Supported_Versions>();
+   BOTAN_ASSERT_NOMSG(versions_ext);
+   const auto& versions = versions_ext->versions();
+   BOTAN_ASSERT_NOMSG(versions.size() == 1);
+   return versions.front();
    }
 
 #endif // BOTAN_HAS_TLS_13

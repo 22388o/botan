@@ -59,7 +59,12 @@ Handshake_Message_13 Handshake_Layer::parse_message(
       case CLIENT_HELLO:
          return Client_Hello_13(msg);
       case SERVER_HELLO:
-         return Server_Hello_13(msg);
+         // SERVER_HELLO might be either an actual server_hello or a
+         // hello_retry_request. Hence, this construction is exceptionally
+         // funneled through a factory method and then transformed into a
+         // generic Handshake_Message_13.
+         return std::visit([](auto message) -> Handshake_Message_13
+            { return message; }, Server_Hello_13::parse(msg));
       case NEW_SESSION_TICKET:
          return New_Session_Ticket_13(msg);
       // case END_OF_EARLY_DATA:
@@ -87,7 +92,7 @@ std::vector<uint8_t> Handshake_Layer::prepare_message(const Handshake_Message_13
    {
    auto [type, serialized] = std::visit([](auto msg)
       {
-      return std::pair(msg.get().type(), msg.get().serialize());
+      return std::pair(msg.get().wire_type(), msg.get().serialize());
       }, message);
 
    BOTAN_ASSERT_NOMSG(serialized.size() <= 0xFFFFFF);

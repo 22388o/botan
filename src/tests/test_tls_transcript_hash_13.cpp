@@ -111,9 +111,7 @@ std::vector<Test::Result> transcript_hash()
          h.update({0x60, 0x0d, 0xf0, 0x0d});
          h.set_algorithm("SHA-256");
 
-         result.test_throws<Botan::Invalid_State>("previous throws invalid state exception",
-               [&] { h.previous(); });
-         result.test_eq("c = SHA-256(deadbeef | goodfood)", h.current(), sha256("baadbeef600df00d"));
+         result.test_eq("c = SHA-256(baadbeef | goodfood)", h.current(), sha256("baadbeef600df00d"));
          }),
 
       CHECK("cloning creates independent transcript_hash instances", [&](Test::Result& result)
@@ -124,12 +122,27 @@ std::vector<Test::Result> transcript_hash()
          h1.update({0x60, 0x0d, 0xf0, 0x0d});
 
          auto h2 = h1.clone();
-         result.test_eq("c1 = SHA-256(deadbeef | goodfood)", h1.current(), sha256("baadbeef600df00d"));
-         result.test_eq("c2 = SHA-256(deadbeef | goodfood)", h2.current(), sha256("baadbeef600df00d"));
+         result.test_eq("c1 = SHA-256(baadbeef | goodfood)", h1.current(), sha256("baadbeef600df00d"));
+         result.test_eq("c2 = SHA-256(baadbeef | goodfood)", h2.current(), sha256("baadbeef600df00d"));
 
          h1.update({0xca, 0xfe, 0xd0, 0x0d});
-         result.test_eq("c1 = SHA-256(deadbeef | goodfood | cafedude)", h1.current(), sha256("baadbeef600df00dcafed00d"));
-         result.test_eq("c2 = SHA-256(deadbeef | goodfood)", h2.current(), sha256("baadbeef600df00d"));
+         result.test_eq("c1 = SHA-256(baadbeef | goodfood | cafedude)", h1.current(), sha256("baadbeef600df00dcafed00d"));
+         result.test_eq("c2 = SHA-256(baadbeef | goodfood)", h2.current(), sha256("baadbeef600df00d"));
+         }),
+
+      CHECK("recreation after hello retry request", [&](Test::Result& result)
+         {
+         Transcript_Hash_State h1;
+
+         h1.update({0xc0, 0xca, 0xc0, 0x1a} /* client hello 1 */);
+         h1.update({0xc0, 0x01, 0xf0, 0x0d} /* hello retry request */);
+
+         auto h2 = Transcript_Hash_State::recreate_after_hello_retry_request("SHA-256", h1);
+
+         // RFC 8446 4.4.1
+         const std::string hash_of_client_hello = Botan::hex_encode(sha256("c0cac01a"));
+         const std::string transcript = "fe000020" + hash_of_client_hello + "c001f00d";
+         result.test_eq("transcript hash of hello retry request", h2.current(), sha256(transcript));
          }),
       };
    }
