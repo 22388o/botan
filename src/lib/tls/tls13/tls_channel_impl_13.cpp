@@ -14,9 +14,7 @@
 #include <botan/internal/tls_seq_numbers.h>
 #include <botan/tls_messages.h>
 
-namespace Botan {
-
-namespace TLS {
+namespace Botan::TLS {
 
 Channel_Impl_13::Channel_Impl_13(Callbacks& callbacks,
                                  Session_Manager& session_manager,
@@ -255,7 +253,5 @@ void Channel_Impl_13::process_alert(const secure_vector<uint8_t>& record)
       m_has_been_closed = true;
       }
    }
-
-}
 
 }

@@ -424,7 +424,7 @@ Client_Hello_12::Client_Hello_12(Handshake_IO& io,
 
    m_extensions.add(new Supported_Versions(m_legacy_version, policy));
 
-   if(client_settings.hostname() != "")
+   if(!client_settings.hostname().empty())
       m_extensions.add(new Server_Name_Indicator(client_settings.hostname()));
 
    if(policy.support_cert_status_message())
@@ -440,7 +440,7 @@ Client_Hello_12::Client_Hello_12(Handshake_IO& io,
 
    auto supported_groups = std::make_unique<Supported_Groups>(policy.key_exchange_groups());
 
-   if(supported_groups->ec_groups().size() > 0)
+   if(!supported_groups->ec_groups().empty())
       {
       m_extensions.add(new Supported_Point_Formats(policy.use_ecc_point_compression()));
       }
@@ -477,7 +477,7 @@ Client_Hello_12::Client_Hello_12(Handshake_IO& io,
 
    auto supported_groups = std::make_unique<Supported_Groups>(policy.key_exchange_groups());
 
-   if(supported_groups->ec_groups().size() > 0)
+   if(!supported_groups->ec_groups().empty())
       {
       m_extensions.add(new Supported_Point_Formats(policy.use_ecc_point_compression()));
       }

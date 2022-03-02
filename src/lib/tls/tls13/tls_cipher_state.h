@@ -150,8 +150,8 @@ class BOTAN_TEST_API Cipher_State
       std::vector<uint8_t> current_nonce(const uint64_t seq_no,
                                          const secure_vector<uint8_t>& iv) const;
 
-      void derive_traffic_secrets(secure_vector<uint8_t> client_traffic_secret,
-                                  secure_vector<uint8_t> server_traffic_secret,
+      void derive_traffic_secrets(const secure_vector<uint8_t>& client_traffic_secret,
+                                  const secure_vector<uint8_t>& server_traffic_secret,
                                   const bool handshake_traffic_secrets = false);
 
       /**
@@ -164,7 +164,7 @@ class BOTAN_TEST_API Cipher_State
        */
       secure_vector<uint8_t> hkdf_expand_label(
          const secure_vector<uint8_t>& secret,
-         std::string                   label,
+         const std::string&            label,
          const std::vector<uint8_t>&   context,
          const size_t                  length) const;
 
@@ -173,8 +173,8 @@ class BOTAN_TEST_API Cipher_State
        */
       secure_vector<uint8_t> derive_secret(
          const secure_vector<uint8_t>& secret,
-         std::string label,
-         const Transcript_Hash& messages_hash) const;
+         const std::string&            label,
+         const Transcript_Hash&        messages_hash) const;
 
       std::vector<uint8_t> empty_hash() const;
 

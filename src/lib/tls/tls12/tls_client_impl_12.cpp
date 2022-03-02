@@ -14,9 +14,7 @@
 #include <botan/internal/tls_client_impl_12.h>
 #include <sstream>
 
-namespace Botan {
-
-namespace TLS {
+namespace Botan::TLS {
 
 namespace {
 
@@ -747,7 +745,5 @@ void Client_Impl_12::process_handshake_msg(const Handshake_State* active_state,
    else
       throw Unexpected_Message("Unknown handshake message received");
    }
-
-}
 
 }

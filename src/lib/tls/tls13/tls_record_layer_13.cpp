@@ -144,7 +144,7 @@ std::vector<uint8_t> Record_Layer::prepare_records(const Record_Type type,
    //   "MUST NOT sent zero-length fragments of Handshake types"
    //   "a record with an Alert type MUST contain exactly one message" [of non-zero length]
    //   "Zero-length fragments of Application Data MAY be sent"
-   BOTAN_ASSERT(data.size() != 0 || type == Record_Type::APPLICATION_DATA,
+   BOTAN_ASSERT(!data.empty() || type == Record_Type::APPLICATION_DATA,
                 "zero-length fragments of types other than application data are not allowed");
 
    if(type == Record_Type::CHANGE_CIPHER_SPEC &&

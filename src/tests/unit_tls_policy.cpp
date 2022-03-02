@@ -150,7 +150,7 @@ class TLS_Policy_Unit_Tests final : public Test
          return result;
          }
 
-      Test::Result test_key_exchange_groups_to_offer()
+      static Test::Result test_key_exchange_groups_to_offer()
          {
          Test::Result result("TLS Policy key share offering");
 

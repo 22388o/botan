@@ -127,7 +127,7 @@ bool Test::Result::test_throws(const std::string& what, const std::string& expec
       }
    }
 
-bool Test::Result::test_no_throw(const std::string& what, std::function<void ()> fn)
+bool Test::Result::test_no_throw(const std::string& what, const std::function<void ()>& fn)
    {
    try
       {

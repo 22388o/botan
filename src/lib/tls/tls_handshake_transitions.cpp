@@ -167,7 +167,7 @@ void Handshake_Transitions::set_expected_next(Handshake_Type msg_type)
    m_hand_expecting_mask |= bitmask_for_handshake_type(msg_type);
    }
 
-void Handshake_Transitions::set_expected_next(std::vector<Handshake_Type> msg_types)
+void Handshake_Transitions::set_expected_next(const std::vector<Handshake_Type>& msg_types)
    {
    for (const auto type : msg_types)
       {

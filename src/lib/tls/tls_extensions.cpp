@@ -12,6 +12,8 @@
 #include <botan/tls_exceptn.h>
 #include <botan/tls_policy.h>
 
+#include <iterator>
+
 namespace Botan::TLS {
 
 namespace {
@@ -96,7 +98,7 @@ void Extensions::add(std::unique_ptr<Extension> extn)
       throw Invalid_Argument("cannot add the same extension twice: " + std::to_string(extn->type()));
       }
 
-   m_extensions.emplace_back(std::move(extn.release()));
+   m_extensions.emplace_back(extn.release());
    }
 
 void Extensions::deserialize(TLS_Data_Reader& reader, Connection_Side from, bool is_hello_retry_request)

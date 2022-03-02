@@ -305,7 +305,7 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                   {
                      const std::string expected_buffer = Botan::hex_encode(buffer);
                      Botan::TLS::TLS_Data_Reader tls_data_reader("ClientHello", buffer);
-                      Botan::TLS::Supported_Versions supported_versions(tls_data_reader, buffer.size(),
+                      Botan::TLS::Supported_Versions supported_versions(tls_data_reader, static_cast<uint16_t>(buffer.size()),
                         Botan::TLS::Connection_Side::CLIENT);
                      const auto serialized_buffer = supported_versions.serialize(Botan::TLS::Connection_Side::CLIENT);
 
@@ -321,7 +321,7 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                else if(extension == "supported_groups")
                   {
                      Botan::TLS::TLS_Data_Reader tls_data_reader("ClientHello", buffer);
-                     Botan::TLS::Supported_Groups supp_groups_ext (tls_data_reader, buffer.size());
+                     Botan::TLS::Supported_Groups supp_groups_ext (tls_data_reader, static_cast<uint16_t>(buffer.size()));
 
                      const auto serialized_buffer = supp_groups_ext.serialize(Botan::TLS::Connection_Side::CLIENT);
                      const auto expected_content = vars.get_req_bin("Expected_Content");
@@ -349,7 +349,7 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                else if(extension == "signature_algorithms_cert")
                   {
                      Botan::TLS::TLS_Data_Reader tls_data_reader("ClientHello", buffer);
-                     Botan::TLS::Signature_Algorithms_Cert sig_algo_cert (tls_data_reader, buffer.size());
+                     Botan::TLS::Signature_Algorithms_Cert sig_algo_cert (tls_data_reader, static_cast<uint16_t>(buffer.size()));
 
                      const auto serialized_buffer = sig_algo_cert.serialize(Botan::TLS::Connection_Side::CLIENT);
                      const auto expected_content = vars.get_req_bin("Expected_Content");
@@ -373,7 +373,7 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                else if (extension == "cookie")
                   {
                   Botan::TLS::TLS_Data_Reader tls_data_reader("HelloRetryRequest", buffer);
-                  Botan::TLS::Cookie cookie(tls_data_reader, buffer.size());
+                  Botan::TLS::Cookie cookie(tls_data_reader, static_cast<uint16_t>(buffer.size()));
 
                   const auto serialized_buffer = cookie.serialize(Botan::TLS::Connection_Side::SERVER);
                   const auto expected_cookie = vars.get_req_bin("Expected_Content");
@@ -383,7 +383,7 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                else if (extension == "key_share_HRR")
                   {
                   Botan::TLS::TLS_Data_Reader tls_data_reader("HelloRetryRequest", buffer);
-                  Botan::TLS::Key_Share key_share(tls_data_reader, buffer.size(), Botan::TLS::Connection_Side::SERVER, true /* is_hello_retry_request */);
+                  Botan::TLS::Key_Share key_share(tls_data_reader, static_cast<uint16_t>(buffer.size()), Botan::TLS::Connection_Side::SERVER, true /* is_hello_retry_request */);
 
                   const auto serialized_buffer = key_share.serialize(Botan::TLS::Connection_Side::CLIENT);
                   const auto expected_key_share = vars.get_req_bin("Expected_Content");
@@ -393,7 +393,7 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                else if (extension == "key_share_SH")
                   {
                   Botan::TLS::TLS_Data_Reader tls_data_reader("ServerHello", buffer);
-                  Botan::TLS::Key_Share key_share(tls_data_reader, buffer.size(), Botan::TLS::Connection_Side::SERVER, false /* is_hello_retry_request */);
+                  Botan::TLS::Key_Share key_share(tls_data_reader, static_cast<uint16_t>(buffer.size()), Botan::TLS::Connection_Side::SERVER, false /* is_hello_retry_request */);
 
                   const auto serialized_buffer = key_share.serialize(Botan::TLS::Connection_Side::CLIENT);
                   const auto expected_key_share = vars.get_req_bin("Expected_Content");
@@ -403,7 +403,7 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
                else if (extension == "key_share_CH")
                   {
                   Botan::TLS::TLS_Data_Reader tls_data_reader("ClientHello", buffer);
-                  Botan::TLS::Key_Share key_share(tls_data_reader, buffer.size(), Botan::TLS::Connection_Side::CLIENT, false /* is_hello_retry_request */);
+                  Botan::TLS::Key_Share key_share(tls_data_reader, static_cast<uint16_t>(buffer.size()), Botan::TLS::Connection_Side::CLIENT, false /* is_hello_retry_request */);
 
                   const auto serialized_buffer = key_share.serialize(Botan::TLS::Connection_Side::SERVER);
                   const auto expected_key_share = vars.get_req_bin("Expected_Content");

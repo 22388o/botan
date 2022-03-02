@@ -15,9 +15,7 @@
 #include <botan/internal/tls_server_impl_12.h>
 #include <botan/tls_magic.h>
 
-namespace Botan {
-
-namespace TLS {
+namespace Botan::TLS {
 
 class Server_Handshake_State final : public Handshake_State
    {
@@ -877,7 +875,7 @@ void Server_Impl_12::session_create(Server_Handshake_State& pending_state,
          // csr is non-null if client_hello()->supports_cert_status_message()
          BOTAN_ASSERT_NOMSG(csr != nullptr);
          const auto resp_bytes = callbacks().tls_provide_cert_status(cert_chains[algo_used], *csr);
-         if(resp_bytes.size() > 0)
+         if(!resp_bytes.empty())
             {
             pending_state.server_cert_status(new Certificate_Status(
                                                 pending_state.handshake_io(),
@@ -943,6 +941,4 @@ void Server_Impl_12::session_create(Server_Handshake_State& pending_state,
 
    pending_state.server_hello_done(new Server_Hello_Done(pending_state.handshake_io(), pending_state.hash()));
    }
-}
-
 }

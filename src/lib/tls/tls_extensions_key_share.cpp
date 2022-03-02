@@ -22,9 +22,7 @@
 #include <botan/dh.h>
 #include <botan/ecdh.h>
 
-namespace Botan {
-
-namespace TLS {
+namespace Botan::TLS {
 
 namespace {
 
@@ -214,7 +212,7 @@ class Key_Share_ClientHello final : public Key_Share_Content
          const auto client_key_share_length = reader.get_uint16_t();
          const auto read_bytes_so_far_begin = reader.read_so_far();
 
-         while(reader.has_remaining() and ((reader.read_so_far() - read_bytes_so_far_begin) < client_key_share_length))
+         while(reader.has_remaining() && ((reader.read_so_far() - read_bytes_so_far_begin) < client_key_share_length))
             {
             const auto group = reader.get_uint16_t();
             const auto key_exchange_length = reader.get_uint16_t();
@@ -489,5 +487,4 @@ void Key_Share::retry_offer(const Key_Share* retry_request_keyshare, const std::
    }
 
 #endif
-}
 }

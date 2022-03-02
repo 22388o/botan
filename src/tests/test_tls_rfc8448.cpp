@@ -7,6 +7,7 @@
 
 #include "tests.h"
 #include <memory>
+#include <utility>
 // Since RFC 8448 uses a specific set of cipher suites we can only run this
 // test if all of them are enabled.
 #if defined(BOTAN_HAS_TLS_13) && \
@@ -140,7 +141,7 @@ class Test_TLS_13_Callbacks : public Botan::TLS::Callbacks
    {
    public:
       Test_TLS_13_Callbacks(Modify_Exts_Fn modify_exts_cb) :
-         session_activated_called(false), m_modify_exts(modify_exts_cb)
+         session_activated_called(false), m_modify_exts(std::move(modify_exts_cb))
          {}
 
       void tls_emit_data(const uint8_t data[], size_t size) override
@@ -284,7 +285,7 @@ class TLS_Context
       TLS_Context(std::unique_ptr<Botan::RandomNumberGenerator> rng_in,
                   RFC8448_Text_Policy policy,
                   Modify_Exts_Fn modify_exts_cb)
-         : m_callbacks(modify_exts_cb)
+         : m_callbacks(std::move(modify_exts_cb))
          , m_rng(std::move(rng_in))
          , m_session_mgr(*m_rng)
          , m_policy(std::move(policy))
@@ -329,7 +330,7 @@ class Server_Context : public TLS_Context
       Server_Context(std::unique_ptr<Botan::RandomNumberGenerator> rng_in,
                      RFC8448_Text_Policy policy,
                      Modify_Exts_Fn modify_exts_cb)
-         : TLS_Context(std::move(rng_in), std::move(policy), modify_exts_cb)
+         : TLS_Context(std::move(rng_in), std::move(policy), std::move(modify_exts_cb))
          , server(m_callbacks, m_session_mgr, m_creds, m_policy, *m_rng)
          {}
 
@@ -347,7 +348,7 @@ class Client_Context : public TLS_Context
       Client_Context(std::unique_ptr<Botan::RandomNumberGenerator> rng_in,
                      RFC8448_Text_Policy policy,
                      Modify_Exts_Fn modify_exts_cb)
-         : TLS_Context(std::move(rng_in), std::move(policy), modify_exts_cb)
+         : TLS_Context(std::move(rng_in), std::move(policy), std::move(modify_exts_cb))
          , client(m_callbacks, m_session_mgr, m_creds, m_policy, *m_rng,
                   Botan::TLS::Server_Information("server"),
                   Botan::TLS::Protocol_Version::TLS_V13)
@@ -395,7 +396,7 @@ void sort_extensions(Botan::TLS::Extensions& exts, Botan::TLS::Connection_Side s
 class Test_TLS_RFC8448 final : public Test
    {
    private:
-      Test::Result simple_1_rtt_client_hello()
+      static Test::Result simple_1_rtt_client_hello()
          {
          Test::Result result("Simple 1-RTT (Client side)");
 
@@ -581,7 +582,7 @@ class Test_TLS_RFC8448 final : public Test
          return result;
          }
 
-      Test::Result hello_retry_request()
+      static Test::Result hello_retry_request()
          {
          Test::Result result("Handshake involving Hello Retry Request (Client side)");
 

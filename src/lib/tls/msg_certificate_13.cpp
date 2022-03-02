@@ -89,7 +89,7 @@ Certificate_13::Certificate_13(const std::vector<uint8_t>& buf,
       // to require that every certificate in the chain be v3. But often
       // the intermediates are outside of the control of the server.
       // But, require that the leaf certificate be v3.
-      if(m_entries.size() == 0 && entry.certificate.x509_version() != 3)
+      if(m_entries.empty() && entry.certificate.x509_version() != 3)
          {
          throw TLS_Exception(Alert::BAD_CERTIFICATE, "The leaf certificate must be v3");
          }

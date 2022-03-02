@@ -48,7 +48,7 @@ class BOTAN_TEST_API Handshake_Transitions
        *
        * @param msg_types the message types
        */
-      void set_expected_next(std::vector<Handshake_Type> msg_types);
+      void set_expected_next(const std::vector<Handshake_Type>& msg_types);
 
       /**
        * Check whether a Change Cipher Spec must be expected

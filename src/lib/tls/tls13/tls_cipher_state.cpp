@@ -78,10 +78,12 @@
  */
 
 #include <limits>
+#include <utility>
 
 #include <botan/internal/tls_cipher_state.h>
 
 #include <botan/aead.h>
+#include <botan/assert.h>
 #include <botan/secmem.h>
 #include <botan/tls_ciphersuite.h>
 #include <botan/hash.h>
@@ -289,8 +291,8 @@ void Cipher_State::advance_with_server_hello(secure_vector<uint8_t>&& shared_sec
    m_state = State::HandshakeTraffic;
    }
 
-void Cipher_State::derive_traffic_secrets(secure_vector<uint8_t> client_traffic_secret,
-      secure_vector<uint8_t> server_traffic_secret,
+void Cipher_State::derive_traffic_secrets(const secure_vector<uint8_t>& client_traffic_secret,
+      const secure_vector<uint8_t>& server_traffic_secret,
       const bool handshake_traffic_secrets)
    {
    const auto& traffic_secret =
@@ -328,29 +330,35 @@ secure_vector<uint8_t> Cipher_State::hkdf_extract(secure_vector<uint8_t>&& ikm) 
 
 secure_vector<uint8_t> Cipher_State::hkdf_expand_label(
    const secure_vector<uint8_t>& secret,
-   std::string                   label,
+   const std::string&            label,
    const std::vector<uint8_t>&   context,
    const size_t                  length) const
    {
    // assemble (serialized) HkdfLabel
    secure_vector<uint8_t> hkdf_label;
-   hkdf_label.reserve(2 /* length */ + (label.size() + 6 /* 'tls13 ' */ + 1 /* length field*/) +
-                      (context.size() + 1 /* length field*/));
+   hkdf_label.reserve(2 /* length */ +
+                      (label.size() +
+                      6 /* 'tls13 ' */ +
+                      1 /* length field*/) +
+                      (context.size() +
+                      1 /* length field*/));
 
    // length
-   BOTAN_ASSERT_NOMSG(length <= std::numeric_limits<uint16_t>::max());
+   BOTAN_ARG_CHECK(length <= std::numeric_limits<uint16_t>::max(), "invalid length");
    const auto len = static_cast<uint16_t>(length);
    hkdf_label.push_back(get_byte<0>(len));
    hkdf_label.push_back(get_byte<1>(len));
 
    // label
    const std::string prefix = "tls13 ";
-   hkdf_label.push_back(prefix.size() + label.size());
+   BOTAN_ARG_CHECK(prefix.size() + label.size() <= 255, "label too large");
+   hkdf_label.push_back(static_cast<uint8_t>(prefix.size() + label.size()));
    hkdf_label.insert(hkdf_label.end(), prefix.cbegin(), prefix.cend());
    hkdf_label.insert(hkdf_label.end(), label.cbegin(), label.cend());
 
    // context
-   hkdf_label.push_back(context.size());
+   BOTAN_ARG_CHECK(context.size() <= 255, "context too large");
+   hkdf_label.push_back(static_cast<uint8_t>(context.size()));
    hkdf_label.insert(hkdf_label.end(), context.cbegin(), context.cend());
 
    // HKDF-Expand
@@ -359,8 +367,8 @@ secure_vector<uint8_t> Cipher_State::hkdf_expand_label(
 
 secure_vector<uint8_t> Cipher_State::derive_secret(
    const secure_vector<uint8_t>& secret,
-   std::string label,
-   const Transcript_Hash& messages_hash) const
+   const std::string&            label,
+   const Transcript_Hash&        messages_hash) const
    {
    return hkdf_expand_label(secret, label, messages_hash, m_hash->output_length());
    }
