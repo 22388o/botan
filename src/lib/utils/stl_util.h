@@ -10,6 +10,7 @@
 #define BOTAN_STL_UTIL_H_
 
 #include <vector>
+#include <variant>
 #include <string>
 #include <map>
 #include <set>
@@ -113,6 +114,11 @@ T concat(const T& buffer, const Ts& ...buffers)
    result.insert(result.begin(), buffer.begin(), buffer.end());
    return result;
    }
+
+template<typename... Alts, typename... Ts>
+constexpr bool holds_any_of(const std::variant<Ts...>& v) noexcept {
+    return (std::holds_alternative<Alts>(v) || ...);
+}
 
 }
 

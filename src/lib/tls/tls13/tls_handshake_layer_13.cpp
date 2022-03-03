@@ -25,19 +25,19 @@ void Handshake_Layer::copy_data(const std::vector<uint8_t>& data_from_peer)
    m_read_buffer.insert(m_read_buffer.end(), data_from_peer.cbegin(), data_from_peer.cend());
    }
 
-Handshake_Layer::ReadResult<Handshake_Message_13> Handshake_Layer::next_message(const Policy& policy,
+std::optional<Handshake_Message_13> Handshake_Layer::next_message(const Policy& policy,
       Transcript_Hash_State& transcript_hash)
    {
    TLS::TLS_Data_Reader reader("handshake message", m_read_buffer);
 
    if(reader.remaining_bytes() < HEADER_LENGTH)
-      { return BytesNeeded(HEADER_LENGTH - reader.remaining_bytes()); }
+      { return std::nullopt; }
 
    Handshake_Type type = Handshake_Type(reader.get_byte());
    const size_t msg_len = reader.get_uint24_t();
 
    if(reader.remaining_bytes() < msg_len)
-      { return BytesNeeded(msg_len - reader.remaining_bytes()); }
+      { return std::nullopt; }
 
    auto msg = parse_message(policy, type, reader.get_fixed<uint8_t>(msg_len));
 

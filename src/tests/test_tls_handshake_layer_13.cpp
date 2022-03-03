@@ -45,28 +45,19 @@ Test::Result CHECK(const char* name, FunT check_fun)
 template<typename T>
 bool has_message(
    Test::Result& test_result,
-   const Handshake_Layer::ReadResult<Handshake_Message_13>& read_result)
+   const std::optional<Handshake_Message_13>& read_result)
    {
-   using H = Handshake_Message_13;
-   test_result.require("has a message", std::holds_alternative<H>(read_result));
-   return std::holds_alternative<T>(std::get<H>(read_result));
+   test_result.require("has a message", read_result.has_value());
+   return std::holds_alternative<T>(read_result.value());
    }
 
 template<typename T>
 const Handshake_Message_13& get_message(
    Test::Result& test_result,
-   const Handshake_Layer::ReadResult<Handshake_Message_13>& read_result)
+   const std::optional<Handshake_Message_13>& read_result)
    {
-   using H = Handshake_Message_13;
    test_result.require("has the expected message", has_message<T>(test_result, read_result));
-   return std::get<T>(std::get<H>(read_result));
-   }
-
-BytesNeeded get_bytes_needed(Test::Result& test_result,
-                             Handshake_Layer::ReadResult<Handshake_Message_13> read_result)
-   {
-   test_result.require("needs bytes", std::holds_alternative<BytesNeeded>(read_result));
-   return std::get<BytesNeeded>(read_result);
+   return std::get<T>(read_result.value());
    }
 
 const auto client_hello_message = Botan::hex_decode(  // from RFC 8448
@@ -187,7 +178,7 @@ std::vector<Test::Result> read_handshake_messages()
          {
          Handshake_Layer hl(Connection_Side::CLIENT);
          Transcript_Hash_State th("SHA-256");
-         result.test_eq("needs header bytes", get_bytes_needed(result, hl.next_message(Policy(), th)), 4);
+         result.confirm("needs header bytes", !hl.next_message(Policy(), th));
          check_transcript_hash_empty(result, th);
          }),
 
@@ -196,7 +187,7 @@ std::vector<Test::Result> read_handshake_messages()
          Handshake_Layer hl(Connection_Side::CLIENT);
          Transcript_Hash_State th("SHA-256");
          hl.copy_data({0x00, 0x01, 0x02});
-         result.test_eq("needs one more byte", get_bytes_needed(result, hl.next_message(Policy(), th)), 1);
+         result.confirm("needs more bytes", !hl.next_message(Policy(), th));
          check_transcript_hash_empty(result, th);
          }),
 
@@ -226,7 +217,8 @@ std::vector<Test::Result> read_handshake_messages()
          const std::vector<uint8_t> partial_client_hello_message(
             client_hello_message.cbegin(), client_hello_message.cend() - 15);
          hl.copy_data(partial_client_hello_message);
-         result.test_eq("needs 15 more bytes", get_bytes_needed(result, hl.next_message(Policy(), th)), 15);
+         result.confirm("needs more bytes", !hl.next_message(Policy(), th));
+         result.confirm("holds pending message data", hl.has_pending_data());
 
          const std::vector<uint8_t> remaining_client_hello_message(
             client_hello_message.cend() - 15, client_hello_message.cend());

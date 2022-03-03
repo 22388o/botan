@@ -12,6 +12,7 @@
 #include <botan/internal/tls_handshake_state.h>
 #include <botan/internal/tls_record.h>
 #include <botan/internal/tls_seq_numbers.h>
+#include <botan/internal/stl_util.h>
 #include <botan/tls_messages.h>
 
 namespace {
@@ -69,20 +70,32 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
          if(std::holds_alternative<BytesNeeded>(result))
             { return std::get<BytesNeeded>(result); }
 
-         auto record = std::get<Record>(result);
+         const auto& record = std::get<Record>(result);
+
+         // RFC 8446 5.1
+         //   Handshake messages MUST NOT be interleaved with other record types.
+         if(record.type != HANDSHAKE && m_handshake_layer.has_pending_data())
+            { throw Unexpected_Message("Expected remainder of a handshake message"); }
+
          if(record.type == HANDSHAKE)
             {
             m_handshake_layer.copy_data(unlock(record.fragment));  // TODO: record fragment should be an ordinary std::vector
 
-            while(true)
+            while(auto handshake_msg = m_handshake_layer.next_message(policy(), m_transcript_hash))
                {
-               // TODO: BytesNeeded is not needed here, hence we could make `next_message` return an optional
-               auto handshake_msg = m_handshake_layer.next_message(policy(), m_transcript_hash);
+               // RFC 8446 5.1
+               //    Handshake messages MUST NOT span key changes.  Implementations
+               //    MUST verify that all messages immediately preceding a key change
+               //    align with a record boundary; if not, then they MUST terminate the
+               //    connection with an "unexpected_message" alert.  Because the
+               //    ClientHello, EndOfEarlyData, ServerHello, Finished, and KeyUpdate
+               //    messages can immediately precede a key change, implementations
+               //    MUST send these messages in alignment with a record boundary.
+               if(holds_any_of<Client_Hello_13/*, EndOfEarlyData,*/, Server_Hello_13, Finished_13/*, KeyUpdate*/>(handshake_msg.value())
+                     && m_handshake_layer.has_pending_data())
+                  { throw Unexpected_Message("Handshake messages must not span key changes"); }
 
-               if(std::holds_alternative<BytesNeeded>(handshake_msg))
-                  { break; }
-
-               process_handshake_msg(std::move(std::get<Handshake_Message_13>(handshake_msg)));
+               process_handshake_msg(std::move(handshake_msg.value()));
                }
             }
          else if(record.type == CHANGE_CIPHER_SPEC)
