@@ -85,11 +85,6 @@ class Channel_Impl_13 : public Channel_Impl
       bool is_closed() const override;
 
       /**
-      * @return certificate chain of the peer (may be empty)
-      */
-      std::vector<X509_Certificate> peer_cert_chain() const override;
-
-      /**
       * Key material export (RFC 5705)
       * @param label a disambiguating label string
       * @param context a per-association context value
@@ -118,33 +113,22 @@ class Channel_Impl_13 : public Channel_Impl
       * this is a DTLS channel with a pending handshake state, in
       * which case we check for timeout and potentially retransmit
       * handshake packets.
+      *
+      * In the TLS 1.3 implementation, this always returns false.
       */
-      bool timeout_check() override;
+      bool timeout_check() override { return false; }
 
    protected:
+      virtual void process_handshake_msg(Handshake_Message_13 msg) = 0;
+      void send_handshake_message(const Handshake_Message_13_Ref message);
+
       Callbacks& callbacks() const { return m_callbacks; }
       Session_Manager& session_manager() { return m_session_manager; }
       RandomNumberGenerator& rng() { return m_rng; }
       const Policy& policy() const { return m_policy; }
 
-      virtual void process_handshake_msg(Handshake_Message_13 msg) = 0;
-
-      virtual void process_post_handshake_msg(Handshake_State&,
-                                              Handshake_Type,
-                                              const std::vector<uint8_t>&) {}
-
-      void send_handshake_message(const Handshake_Message_13_Ref message);
-
    private:
       void send_record(uint8_t record_type, const std::vector<uint8_t>& record);
-
-      void send_record_array(uint16_t epoch, uint8_t record_type,
-                             const uint8_t input[], size_t length);
-
-      void write_record(Connection_Cipher_State* cipher_state,
-                        uint16_t epoch, uint8_t type, const uint8_t input[], size_t length);
-
-      Connection_Sequence_Numbers& sequence_numbers() const;
 
       void process_alert(const secure_vector<uint8_t>& record);
 
@@ -161,9 +145,6 @@ class Channel_Impl_13 : public Channel_Impl
       Session_Manager& m_session_manager;
       RandomNumberGenerator& m_rng;
       const Policy& m_policy;
-
-      /* sequence number state */
-      std::unique_ptr<Connection_Sequence_Numbers> m_sequence_numbers;
 
       /* handshake state */
       Record_Layer m_record_layer;

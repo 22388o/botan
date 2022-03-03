@@ -290,4 +290,10 @@ void TLS::Client_Impl_13::handle(const New_Session_Ticket_13&)
    m_transitions.set_expected_next(expected_post_handshake_messages());
    }
 
+std::vector<X509_Certificate> Client_Impl_13::peer_cert_chain() const
+   {
+   throw Not_Implemented("peer cert chain is not implemented");
+   return std::vector<X509_Certificate>();
+   }
+
 }

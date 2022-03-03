@@ -61,11 +61,6 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
 
             m_handshake_layer.copy_data(unlock(record.fragment));  // TODO: record fragment should be an ordinary std::vector
 
-            // m_handshake_state->handshake_io().add_record(record.fragment.data(),
-            //       record.fragment.size(),
-            //       record.type,
-            //       0 /* sequence number unused in TLS 1.3 */);
-
             while (true)
                {
                // TODO: BytesNeeded is not needed here, hence we could make `next_message` return an optional
@@ -78,23 +73,6 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
 
                process_handshake_msg(std::move(std::get<Handshake_Message_13>(handshake_msg)));
                }
-
-//            while(true)
-//               {
-//               auto [type, content] = m_handshake_state->get_next_handshake_msg();
-//               if(type == HANDSHAKE_NONE)
-//                  {
-//                  break;
-//                  }
-//               else if (type == NEW_SESSION_TICKET || type == KEY_UPDATE /* TODO or POST_HANDSHAKE_AUTH */)
-//                  {
-//                  process_post_handshake_msg(*m_handshake_state.get(), type, content);
-//                  }
-//               else
-//                  {
-//                  process_handshake_msg(*m_handshake_state.get(), type, content);
-//                  }
-//               }
             }
          else if(record.type == CHANGE_CIPHER_SPEC)
             {
@@ -158,11 +136,6 @@ void Channel_Impl_13::send(const uint8_t buf[], size_t buf_size)
    send_record(Record_Type::APPLICATION_DATA, {buf, buf+buf_size});
    }
 
-// void Channel_Impl_13::send_handshake_message(Handshake_Message_13& )
-//    {
-//    m_handshake_layer.prepare_message(hello);
-//    }
-
 void Channel_Impl_13::send_alert(const Alert& alert)
    {
    if(alert.is_valid() && !is_closed())
@@ -187,18 +160,12 @@ bool Channel_Impl_13::is_closed() const
    return m_has_been_closed;
    }
 
-std::vector<X509_Certificate> Channel_Impl_13::peer_cert_chain() const
-   {
-   return std::vector<X509_Certificate>();
-   }
-
 SymmetricKey Channel_Impl_13::key_material_export(const std::string& label,
       const std::string& context,
       size_t length) const
    {
    BOTAN_UNUSED(label, context, length);
-
-   return SymmetricKey();
+   throw Not_Implemented("key material export is not implemented");
    }
 
 void Channel_Impl_13::renegotiate(bool force_full_renegotiation)
@@ -214,22 +181,11 @@ bool Channel_Impl_13::secure_renegotiation_supported() const
    return false;
    }
 
-bool Channel_Impl_13::timeout_check()
-   {
-   return false;
-   }
-
 void Channel_Impl_13::send_record(uint8_t record_type, const std::vector<uint8_t>& record)
    {
    const auto to_write = m_record_layer.prepare_records(static_cast<Record_Type>(record_type),
                          record, m_cipher_state.get());
    callbacks().tls_emit_data(to_write.data(), to_write.size());
-   }
-
-Connection_Sequence_Numbers& Channel_Impl_13::sequence_numbers() const
-   {
-   BOTAN_ASSERT(m_sequence_numbers, "Have a sequence numbers object");
-   return *m_sequence_numbers;
    }
 
 void Channel_Impl_13::process_alert(const secure_vector<uint8_t>& record)

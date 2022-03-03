@@ -65,6 +65,11 @@ class Client_Impl_13 : public Channel_Impl_13
       */
       std::string application_protocol() const override { return m_application_protocol; }
 
+      /**
+      * @return certificate chain of the peer (may be empty)
+      */
+      std::vector<X509_Certificate> peer_cert_chain() const override;
+
    private:
       void process_handshake_msg(Handshake_Message_13 msg) override;
 
