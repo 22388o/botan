@@ -127,13 +127,23 @@ class BOTAN_TEST_API Cipher_State
       secure_vector<uint8_t> psk(const std::vector<uint8_t>& nonce) const;
 
       /**
-       * Indicates whether the appropriate secrets to encrypt/decrypt
-       * application traffic are available
+       * Indicates whether the appropriate secrets to encrypt application traffic are available
        */
-      bool ready_for_application_traffic() const
+      bool can_encrypt_application_traffic() const
          {
-         return m_state != State::Uninitialized && m_state != State::HandshakeTraffic;
+         return m_state != State::Uninitialized && m_state != State::HandshakeTraffic
+            && !m_write_key.empty() && !m_write_iv.empty();
          }
+
+      /**
+       * Remove handshake/traffic secrets for decrypting data from peer
+       */
+      void clear_read_keys();
+
+      /**
+       * Remove handshake/traffic secrets for encrypting data
+       */
+      void clear_write_keys();
 
    private:
       /**

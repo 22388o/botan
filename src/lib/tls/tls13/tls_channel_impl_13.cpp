@@ -14,6 +14,21 @@
 #include <botan/internal/tls_seq_numbers.h>
 #include <botan/tls_messages.h>
 
+namespace {
+bool is_closure_alert(const Botan::TLS::Alert& alert)
+   {
+   return alert.type() == Botan::TLS::Alert::CLOSE_NOTIFY
+          || alert.type() == Botan::TLS::Alert::USER_CANCELED;
+   }
+
+bool is_error_alert(const Botan::TLS::Alert& alert)
+   {
+   // In TLS 1.3 all alerts except for closure alerts are considered error alerts.
+   // (RFC 8446 6.)
+   return !is_closure_alert(alert);
+   }
+}
+
 namespace Botan::TLS {
 
 Channel_Impl_13::Channel_Impl_13(Callbacks& callbacks,
@@ -21,7 +36,7 @@ Channel_Impl_13::Channel_Impl_13(Callbacks& callbacks,
                                  RandomNumberGenerator& rng,
                                  const Policy& policy,
                                  bool is_server,
-                                 size_t reserved_io_buffer_size) :
+                                 size_t) :
    m_side(is_server ? Connection_Side::SERVER : Connection_Side::CLIENT),
    m_callbacks(callbacks),
    m_session_manager(session_manager),
@@ -29,16 +44,20 @@ Channel_Impl_13::Channel_Impl_13(Callbacks& callbacks,
    m_policy(policy),
    m_record_layer(m_side),
    m_handshake_layer(m_side),
-   m_has_been_closed(false)
+   m_can_read(true),
+   m_can_write(true)
    {
-   m_writebuf.reserve(reserved_io_buffer_size);
-   m_readbuf.reserve(reserved_io_buffer_size);
    }
 
 Channel_Impl_13::~Channel_Impl_13() = default;
 
 size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
    {
+   // RFC 8446 6.1
+   //    Any data received after a closure alert has been received MUST be ignored.
+   if(!m_can_read)
+      { return 0; }
+
    try
       {
       m_record_layer.copy_data(std::vector(input, input+input_size));
@@ -48,45 +67,38 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
          auto result = m_record_layer.next_record(m_cipher_state.get());
 
          if(std::holds_alternative<BytesNeeded>(result))
-            {
-            return std::get<BytesNeeded>(result);
-            }
+            { return std::get<BytesNeeded>(result); }
 
          auto record = std::get<Record>(result);
-
          if(record.type == HANDSHAKE)
             {
-            if(m_has_been_closed)
-               { throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "Received handshake data after connection closure"); }
-
             m_handshake_layer.copy_data(unlock(record.fragment));  // TODO: record fragment should be an ordinary std::vector
 
-            while (true)
+            while(true)
                {
                // TODO: BytesNeeded is not needed here, hence we could make `next_message` return an optional
                auto handshake_msg = m_handshake_layer.next_message(policy(), m_transcript_hash);
 
                if(std::holds_alternative<BytesNeeded>(handshake_msg))
-                  {
-                  break;
-                  }
+                  { break; }
 
                process_handshake_msg(std::move(std::get<Handshake_Message_13>(handshake_msg)));
                }
             }
          else if(record.type == CHANGE_CIPHER_SPEC)
             {
-            if(m_has_been_closed)
-               { throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "Received change cipher spec after connection closure"); }
-
+            // RFC 8446 5.
+            //    An implementation may receive an unencrypted record of type change_cipher_spec
+            //    [...]
+            //    at any time after the first ClientHello message has been sent or received
+            //    and before the peer's Finished message has been received
+            //    TODO: Unexpected_Message otherwise
+            //    [...]
+            //    and MUST simply drop it without further processing.
             // TODO: Send CCS in response / middlebox compatibility mode to be defined via the policy
-            // TODO: as described in RFC 8446 Sec 5
             }
          else if(record.type == APPLICATION_DATA)
             {
-            if(m_has_been_closed)
-               { throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "Received application data after connection closure"); }
-
             BOTAN_ASSERT(record.seq_no.has_value(), "decrypted application traffic had a sequence number");
             callbacks().tls_record_received(record.seq_no.value(), record.fragment.data(), record.fragment.size());
             }
@@ -94,7 +106,7 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
             {
             process_alert(record.fragment);
             }
-         else if(record.type != NO_RECORD)
+         else
             { throw Unexpected_Message("Unexpected record type " + std::to_string(record.type) + " from counterparty"); }
          }
       }
@@ -138,7 +150,7 @@ void Channel_Impl_13::send(const uint8_t buf[], size_t buf_size)
 
 void Channel_Impl_13::send_alert(const Alert& alert)
    {
-   if(alert.is_valid() && !is_closed())
+   if(alert.is_valid() && m_can_write)
       {
       try
          {
@@ -147,17 +159,26 @@ void Channel_Impl_13::send_alert(const Alert& alert)
       catch(...) { /* swallow it */ }
       }
 
-   // TODO handle alerts
+   // Note: In TLS 1.3 sending a CLOSE_NOTIFY must not immediately lead to closing the reading end.
+   // RFC 8446 6.1
+   //    Each party MUST send a "close_notify" alert before closing its write
+   //    side of the connection, unless it has already sent some error alert.
+   //    This does not have any effect on its read side of the connection.
+   if(is_closure_alert(alert))
+      {
+      m_can_write = false;
+      m_cipher_state->clear_write_keys();
+      }
+
+   if(is_error_alert(alert))
+      { shutdown(); }
    }
 
 bool Channel_Impl_13::is_active() const
    {
-   return !is_closed() && m_cipher_state != nullptr && m_cipher_state->ready_for_application_traffic();
-   }
-
-bool Channel_Impl_13::is_closed() const
-   {
-   return m_has_been_closed;
+   return
+      m_cipher_state != nullptr && m_cipher_state->can_encrypt_application_traffic() // handshake done
+      && m_can_write;  // close() hasn't been called
    }
 
 SymmetricKey Channel_Impl_13::key_material_export(const std::string& label,
@@ -168,21 +189,9 @@ SymmetricKey Channel_Impl_13::key_material_export(const std::string& label,
    throw Not_Implemented("key material export is not implemented");
    }
 
-void Channel_Impl_13::renegotiate(bool force_full_renegotiation)
-   {
-   BOTAN_UNUSED(force_full_renegotiation);
-
-   throw Botan::TLS::Unexpected_Message("Cannot renegotiate in TLS 1.3");
-   }
-
-bool Channel_Impl_13::secure_renegotiation_supported() const
-   {
-   // No renegotiation supported in TLS 1.3
-   return false;
-   }
-
 void Channel_Impl_13::send_record(uint8_t record_type, const std::vector<uint8_t>& record)
    {
+   BOTAN_STATE_CHECK(m_can_write);
    const auto to_write = m_record_layer.prepare_records(static_cast<Record_Type>(record_type),
                          record, m_cipher_state.get());
    callbacks().tls_emit_data(to_write.data(), to_write.size());
@@ -190,24 +199,28 @@ void Channel_Impl_13::send_record(uint8_t record_type, const std::vector<uint8_t
 
 void Channel_Impl_13::process_alert(const secure_vector<uint8_t>& record)
    {
-   Alert alert_msg(record);
+   Alert alert(record);
 
-   callbacks().tls_alert(alert_msg);
-
-   if(alert_msg.is_fatal())
+   if(is_closure_alert(alert))
       {
-      //TODO: single handshake state should have some flag to indicate, whether it is active?
-      //  if(auto state = handshake_state())
-      //     m_session_manager.remove_entry(state->server_hello()->session_id());
+      m_can_read = false;
+      m_cipher_state->clear_read_keys();
       }
 
-   if(alert_msg.type() == Alert::CLOSE_NOTIFY)
-      { send_warning_alert(Alert::CLOSE_NOTIFY); } // reply in kind
+   if(is_error_alert(alert))
+      { shutdown(); }
 
-   if(alert_msg.type() == Alert::CLOSE_NOTIFY || alert_msg.is_fatal())
-      {
-      m_has_been_closed = true;
-      }
+   callbacks().tls_alert(alert);
+   }
+
+void Channel_Impl_13::shutdown()
+   {
+   // RFC 8446 6.2
+   //    Upon transmission or receipt of a fatal alert message, both
+   //    parties MUST immediately close the connection.
+   m_can_read = false;
+   m_can_write = false;
+   m_cipher_state.reset();
    }
 
 }

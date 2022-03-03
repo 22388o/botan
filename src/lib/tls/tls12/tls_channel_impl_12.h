@@ -90,11 +90,6 @@ class Channel_Impl_12 : public Channel_Impl
       void send_alert(const Alert& alert) override;
 
       /**
-      * Send a close notification alert
-      */
-      void close() override { send_warning_alert(Alert::CLOSE_NOTIFY); }
-
-      /**
       * @return true iff the connection is active for sending application data
       */
       bool is_active() const override;

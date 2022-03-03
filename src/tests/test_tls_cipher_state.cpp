@@ -276,6 +276,8 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
          auto cs = Cipher_State::init_with_server_hello(Connection_Side::CLIENT, std::move(my_shared_secret), cipher,
                th_server_hello);
 
+         result.confirm("can not yet write application data", !cs->can_encrypt_application_traffic());
+
          // decrypt encrypted extensions from server
          encrypted_extensions.decrypt(result, cs.get());
 
@@ -301,6 +303,8 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
                cs->advance_with_server_finished(th_server_finished);
                });
 
+         result.confirm("can write application data", cs->can_encrypt_application_traffic());
+
          // decrypt "new session ticket" post-handshake message from server
          // (encrypted under the application traffic secret)
          encrypted_new_session_ticket.decrypt(result, cs.get());
@@ -322,6 +326,10 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
          // derive PSK for resumption
          const auto psk = cs->psk({0x00, 0x00} /* ticket_nonce as defined in RFC 8448 */);
          result.test_eq("PSK matches", psk, expected_psk);
+
+         // cleanup
+         cs->clear_write_keys();
+         result.confirm("can no longer write application data", !cs->can_encrypt_application_traffic());
          })
       };
    }

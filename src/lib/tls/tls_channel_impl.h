@@ -64,8 +64,7 @@ class Channel_Impl
       /**
       * Send a close notification alert
       */
-      virtual void close() = 0;
-
+      void close() { send_warning_alert(Alert::CLOSE_NOTIFY); }
 
       /**
       * @return true iff the connection is active for sending application data

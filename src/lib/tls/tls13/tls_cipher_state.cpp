@@ -112,8 +112,8 @@ void Cipher_State::advance_with_server_finished(const Transcript_Hash& transcrip
    {
    BOTAN_ASSERT_NOMSG(m_state == State::HandshakeTraffic);
 
-   m_finished_key.clear();
-   m_peer_finished_key.clear();
+   zap(m_finished_key);
+   zap(m_peer_finished_key);
 
    const auto master_secret = hkdf_extract(secure_vector<uint8_t>(m_hash->output_length(), 0x00));
 
@@ -133,7 +133,7 @@ void Cipher_State::advance_with_client_finished(const Transcript_Hash& transcrip
    m_resumption_master_secret = derive_secret(master_secret, "res master", transcript_hash);
 
    // This was the final state change; the salt is no longer needed.
-   m_salt.clear();
+   zap(m_salt);
 
    m_state = State::Completed;
    }
@@ -377,4 +377,16 @@ std::vector<uint8_t> Cipher_State::empty_hash() const
    {
    m_hash->update("");
    return m_hash->final_stdvec();
+   }
+
+void Cipher_State::clear_read_keys()
+   {
+   zap(m_peer_write_key);
+   zap(m_peer_write_iv);
+   }
+
+void Cipher_State::clear_write_keys()
+   {
+   zap(m_write_key);
+   zap(m_write_iv);
    }

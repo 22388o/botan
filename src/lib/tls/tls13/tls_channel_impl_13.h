@@ -13,14 +13,7 @@
 #include <botan/internal/tls_handshake_layer_13.h>
 #include <botan/internal/tls_transcript_hash_13.h>
 
-namespace Botan {
-
-class HashFunction;
-
-namespace TLS {
-
-class Connection_Sequence_Numbers;
-class Connection_Cipher_State;
+namespace Botan::TLS {
 
 /**
 * Generic interface for TLSv.12 endpoint
@@ -37,16 +30,13 @@ class Channel_Impl_13 : public Channel_Impl
       * @param rng a random number generator
       * @param policy specifies other connection policy information
       * @param is_server whether this is a server session or not
-      * @param io_buf_sz This many bytes of memory will
-      *        be preallocated for the read and write buffers. Smaller
-      *        values just mean reallocations and copies are more likely.
       */
       explicit Channel_Impl_13(Callbacks& callbacks,
                                Session_Manager& session_manager,
                                RandomNumberGenerator& rng,
                                const Policy& policy,
                                bool is_server,
-                               size_t io_buf_sz = Botan::TLS::Channel::IO_BUF_DEFAULT_SIZE);
+                               size_t /* unused */);
 
       explicit Channel_Impl_13(const Channel_Impl_13&) = delete;
 
@@ -70,19 +60,18 @@ class Channel_Impl_13 : public Channel_Impl
       void send_alert(const Alert& alert) override;
 
       /**
-      * Send a close notification alert
-      */
-      void close() override { send_warning_alert(Alert::CLOSE_NOTIFY); }
-
-      /**
       * @return true iff the connection is active for sending application data
+      *
+      * Note that the connection is active until the application has called
+      * `close()`, even if a CLOSE_NOTIFY has been received from the peer.
       */
       bool is_active() const override;
 
       /**
-      * @return true iff the connection has been definitely closed
+      * @return true iff the connection has been closed, i.e. CLOSE_NOTIFY
+      * has been received from the peer.
       */
-      bool is_closed() const override;
+      bool is_closed() const override { return !m_can_read; }
 
       /**
       * Key material export (RFC 5705)
@@ -97,16 +86,21 @@ class Channel_Impl_13 : public Channel_Impl
 
       /**
       * Attempt to renegotiate the session
-      * @param force_full_renegotiation if true, require a full renegotiation,
-      * otherwise allow session resumption
       */
-      void renegotiate(bool force_full_renegotiation = false) override;
+      void renegotiate(bool/* unused */) override
+         {
+         throw Botan::Invalid_Argument("renegotiation is not allowed in TLS 1.3");
+         }
 
       /**
       * @return true iff the counterparty supports the secure
       * renegotiation extensions.
       */
-      bool secure_renegotiation_supported() const override;
+      bool secure_renegotiation_supported() const override
+         {
+         // No renegotiation supported in TLS 1.3
+         return false;
+         }
 
       /**
       * Perform a handshake timeout check. This does nothing unless
@@ -132,6 +126,12 @@ class Channel_Impl_13 : public Channel_Impl
 
       void process_alert(const secure_vector<uint8_t>& record);
 
+      /**
+       * Terminate the connection (on sending or receiving an error alert) and
+       * clear secrets
+       */
+      void shutdown();
+
    protected:
       const Connection_Side m_side;
       Transcript_Hash_State m_transcript_hash;
@@ -150,16 +150,9 @@ class Channel_Impl_13 : public Channel_Impl
       Record_Layer m_record_layer;
       Handshake_Layer m_handshake_layer;
 
-      /* I/O buffers */
-      secure_vector<uint8_t> m_writebuf;
-      secure_vector<uint8_t> m_readbuf;
-      secure_vector<uint8_t> m_record_buf;
-
-      bool m_has_been_closed;
+      bool m_can_read;
+      bool m_can_write;
    };
-
-}
-
 }
 
 #endif
