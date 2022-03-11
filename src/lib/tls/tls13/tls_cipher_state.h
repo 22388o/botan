@@ -127,6 +127,35 @@ class BOTAN_TEST_API Cipher_State
       secure_vector<uint8_t> psk(const std::vector<uint8_t>& nonce) const;
 
       /**
+       * Derive key material to export (RFC 8446 7.5 and RFC 5705)
+       *
+       * TODO: this does not yet support key export based on the `early_exporter_master_secret`.
+       *
+       * RFC 8446 7.5
+       *    Implementations MUST use the exporter_master_secret unless explicitly
+       *    specified by the application. The early_exporter_master_secret is
+       *    defined for use in settings where an exporter is needed for 0-RTT data.
+       *    A separate interface for the early exporter is RECOMMENDED [...].
+       *
+       * @param label     a disambiguating label string
+       * @param context   a per-association context value
+       * @param length    the length of the desired key in bytes
+       * @return          key of length bytes
+       */
+      secure_vector<uint8_t> export_key(const std::string& label,
+                                        const std::string& context,
+                                        size_t length) const;
+
+      /**
+       * Indicates whether the appropriate secrets to export keys are available
+       */
+      bool can_export_keys() const
+         {
+         return (m_state == State::ApplicationTraffic || m_state == State::Completed) &&
+                !m_exporter_master_secret.empty();
+         }
+
+      /**
        * Indicates whether the appropriate secrets to encrypt application traffic are available
        */
       bool can_encrypt_application_traffic() const
@@ -222,6 +251,7 @@ class BOTAN_TEST_API Cipher_State
 
       secure_vector<uint8_t> m_finished_key;
       secure_vector<uint8_t> m_peer_finished_key;
+      secure_vector<uint8_t> m_exporter_master_secret;
       secure_vector<uint8_t> m_resumption_master_secret;
    };
 

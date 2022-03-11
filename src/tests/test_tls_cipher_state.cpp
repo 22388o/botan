@@ -92,6 +92,11 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
       "4e cd 0e b6 ec 3b 4d 87 f5 d6 02 8f 92 2c a4 c5"
       "85 1a 27 7f d4 13 11 c9 e6 2d 2c 94 92 e1 c4 f3");
 
+   const std::string export_label   = "export_test_label";
+   const std::string export_context = "rfc8448_rtt1";
+   const auto expected_key_export = Botan::hex_decode_locked(
+      "f2 00 58 a6 5c e0 43 0a 19 79 44 c8 12 43 1c 2d");
+
    // transcript hash from client hello and server hello
    const auto th_server_hello = Botan::hex_decode(
                                    "86 0c 06 ed c0 78 58 ee 8e 78 f0 e7 42 8c 58 ed"
@@ -277,6 +282,7 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
                th_server_hello);
 
          result.confirm("can not yet write application data", !cs->can_encrypt_application_traffic());
+         result.confirm("can not yet export key material", !cs->can_export_keys());
 
          // decrypt encrypted extensions from server
          encrypted_extensions.decrypt(result, cs.get());
@@ -304,6 +310,8 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
                });
 
          result.confirm("can write application data", cs->can_encrypt_application_traffic());
+         result.confirm("can export key material", cs->can_export_keys());
+         result.test_eq("key export produces expected result", cs->export_key(export_label, export_context, 16), expected_key_export);
 
          // decrypt "new session ticket" post-handshake message from server
          // (encrypted under the application traffic secret)
@@ -322,6 +330,9 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
                {
                cs->advance_with_client_finished(th_client_finished);
                });
+
+         result.confirm("can export key material still", cs->can_export_keys());
+         result.test_eq("key export result did not change", cs->export_key(export_label, export_context, 16), expected_key_export);
 
          // derive PSK for resumption
          const auto psk = cs->psk({0x00, 0x00} /* ticket_nonce as defined in RFC 8448 */);

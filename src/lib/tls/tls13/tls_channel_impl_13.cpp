@@ -198,8 +198,8 @@ SymmetricKey Channel_Impl_13::key_material_export(const std::string& label,
       const std::string& context,
       size_t length) const
    {
-   BOTAN_UNUSED(label, context, length);
-   throw Not_Implemented("key material export is not implemented");
+   BOTAN_STATE_CHECK(m_cipher_state != nullptr && m_cipher_state->can_export_keys());
+   return m_cipher_state->export_key(label, context, length);
    }
 
 void Channel_Impl_13::send_record(uint8_t record_type, const std::vector<uint8_t>& record)

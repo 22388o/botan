@@ -121,6 +121,8 @@ void Cipher_State::advance_with_server_finished(const Transcript_Hash& transcrip
       derive_secret(master_secret, "c ap traffic", transcript_hash),
       derive_secret(master_secret, "s ap traffic", transcript_hash));
 
+   m_exporter_master_secret = derive_secret(master_secret, "exp master", transcript_hash);
+
    m_state = State::ApplicationTraffic;
    }
 
@@ -219,6 +221,20 @@ secure_vector<uint8_t> Cipher_State::psk(const std::vector<uint8_t>& nonce) cons
 
    return derive_secret(m_resumption_master_secret, "resumption", nonce);
    }
+
+
+secure_vector<uint8_t> Cipher_State::export_key(const std::string& label,
+      const std::string& context,
+      size_t length) const
+   {
+   BOTAN_ASSERT_NOMSG(can_export_keys());
+
+   m_hash->update(context);
+   const auto context_hash = m_hash->final_stdvec();
+   return hkdf_expand_label(derive_secret(m_exporter_master_secret, label, empty_hash()),
+                            "exporter", context_hash, length);
+   }
+
 
 namespace {
 
