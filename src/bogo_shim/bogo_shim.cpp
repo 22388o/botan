@@ -23,6 +23,8 @@
 #include <botan/hex.h>
 #include <botan/internal/parsing.h>
 #include <botan/mem_ops.h>
+#include <botan/internal/os_utils.h>
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -139,6 +141,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Policy refuses to accept signing with any hash supported by peer", ":NO_COMMON_SIGNATURE_ALGORITHMS:" },
          { "Policy requires client send a certificate, but it did not", ":PEER_DID_NOT_RETURN_A_CERTIFICATE:" },
          { "Received a record that exceeds maximum size", ":ENCRYPTED_LENGTH_TOO_LONG:" },
+         { "Received an encrypted record that exceeds maximum size", ":ENCRYPTED_LENGTH_TOO_LONG:" },
          { "Received application data after connection closure", ":APPLICATION_DATA_ON_SHUTDOWN:" },
          { "Received handshake data after connection closure", ":NO_RENEGOTIATION:" },
          { "Received unexpected record version in initial record", ":WRONG_VERSION_NUMBER:" },
@@ -155,6 +158,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Server replied with ciphersuite we didn't send", ":WRONG_CIPHER_RETURNED:" },
          { "Server replied with an invalid version", ":UNSUPPORTED_PROTOCOL:" },  // bogus version from "ServerBogusVersion"
          { "Server version SSL v3 is unacceptable by policy", ":UNSUPPORTED_PROTOCOL:" },  // "NoSSL3-Client-Unsolicited"
+         { "legacy_version must be set to 1.2 in TLS 1.3", ":UNSUPPORTED_PROTOCOL:" },  // bogus version from "ServerBogusVersion"
          { "Server replied with non-null compression method", ":UNSUPPORTED_COMPRESSION_ALGORITHM:" },
          { "Server replied with some unknown ciphersuite", ":UNKNOWN_CIPHER_RETURNED:" },
          { "Server replied with unsupported extensions: 0", ":UNEXPECTED_EXTENSION:" },
@@ -196,6 +200,9 @@ std::string map_to_bogo_error(const std::string& e)
          { "Unexpected state transition in handshake got a hello_request expected server_hello", ":UNEXPECTED_MESSAGE:" },
          { "Unexpected state transition in handshake got a server_hello_done expected server_key_exchange seen server_hello+certificate+certificate_status", ":UNEXPECTED_MESSAGE:" },
          { "Unexpected state transition in handshake got a server_key_exchange expected certificate_request|server_hello_done seen server_hello+certificate+certificate_status", ":UNEXPECTED_MESSAGE:" },
+         { "Unexpected state transition in handshake got a server_hello_done expected server_key_exchange seen server_hello+certificate", ":UNEXPECTED_MESSAGE:" },
+         { "Unexpected state transition in handshake got a server_key_exchange expected certificate seen server_hello", ":UNEXPECTED_MESSAGE:" },
+         { "Unexpected state transition in handshake got a server_key_exchange expected certificate_request|server_hello_done seen server_hello+certificate", ":UNEXPECTED_MESSAGE:" },
          { "Unexpected state transition in handshake got a server_key_exchange not expecting messages", ":BAD_HELLO_REQUEST:" },
          { "Unknown TLS handshake message type 43", ":UNEXPECTED_MESSAGE:" },
          { "Unknown TLS handshake message type 44", ":UNEXPECTED_MESSAGE:" },
@@ -210,6 +217,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Unknown TLS handshake message type 6", ":UNEXPECTED_MESSAGE:" },
          { "Unknown TLS handshake message type 62", ":UNEXPECTED_MESSAGE:" },
          { "Unknown TLS handshake message type 64", ":UNEXPECTED_MESSAGE:" },
+         { "Unknown handshake message received", ":UNEXPECTED_MESSAGE:" },
          { "signature_algorithm_of_scheme: Unknown signature algorithm enum", ":WRONG_SIGNATURE_TYPE:" },
       };
 
@@ -613,7 +621,7 @@ std::unique_ptr<Shim_Arguments> parse_options(char* argv[])
       "no-tls1",
       "no-tls11",
       "no-tls12",
-      "no-tls13", // implict due to 1.3 not being implemented
+      "no-tls13",
       "on-resume-no-ticket",
       //"on-resume-verify-fail",
       //"partial-write",
@@ -675,7 +683,7 @@ std::unique_ptr<Shim_Arguments> parse_options(char* argv[])
       "test-name",
       "use-client-ca-list",
       //"send-channel-id",
-      //"write-settings",
+      "write-settings",
    };
 
    const std::set<std::string> bogo_shim_base64_opts = {
@@ -863,9 +871,16 @@ class Shim_Policy final : public Botan::TLS::Policy
          if(m_args.option_used("curves"))
             {
             std::vector<Botan::TLS::Group_Params> groups;
+
+            // upcall to base class to find the groups actually supported by
+            // this Botan build
+            const auto supported_groups = Botan::TLS::Policy::key_exchange_groups();
+
             for(size_t pref : m_args.get_int_vec_opt("curves"))
                {
-               groups.push_back(static_cast<Botan::TLS::Group_Params>(pref));
+               const auto group = static_cast<Botan::TLS::Group_Params>(pref);
+               if(std::find(supported_groups.cbegin(), supported_groups.cend(), group) != supported_groups.end())
+                  groups.push_back(group);
                }
 
             return groups;
@@ -944,8 +959,7 @@ class Shim_Policy final : public Botan::TLS::Policy
 
       bool allow_tls13() const override
          {
-         //TODO: No TLS 1.3 allowed until it is implemented
-         return false;
+         return !m_args.flag_set("dtls") && !m_args.flag_set("no-tls13") && allow_version(Botan::TLS::Protocol_Version::TLS_V13);
          }
 
       bool allow_dtls12() const override
@@ -1237,6 +1251,14 @@ class Shim_Callbacks final : public Botan::TLS::Callbacks
       void tls_emit_data(const uint8_t data[], size_t size) override
          {
          shim_log("sending record of len " + std::to_string(size));
+
+         if(m_args.option_used("write-settings"))
+            {
+            // TODO: the transcript option should probably be used differently
+            std::cout << ">>>" << std::endl
+                            << Botan::hex_encode(data, size) << std::endl
+                            << ">>>" << std::endl;
+            }
 
          if(m_is_datagram)
             {
@@ -1535,7 +1557,6 @@ int main(int /*argc*/, char* argv[])
       const size_t resume_count = args->get_int_opt_or_else("resume-count", 0);
       const bool is_server = args->flag_set("server");
       const bool is_datagram = args->flag_set("dtls");
-
       const size_t buf_size = args->get_int_opt_or_else("read-size", 18*1024);
 
       Botan::ChaCha_RNG rng(Botan::secure_vector<uint8_t>(64));
@@ -1631,6 +1652,15 @@ int main(int /*argc*/, char* argv[])
                   }
 
                shim_log("Got packet of " + std::to_string(got));
+
+
+               if(args->option_used("write-settings"))
+                  {
+                  // TODO: the transcript option should probably be used differently
+                  std::cout << "<<<" << std::endl
+                            << Botan::hex_encode(buf.data(), got) << std::endl
+                            << "<<<" << std::endl;
+                  }
 
                if(args->flag_set("use-exporter-between-reads") && chan->is_active())
                   {
