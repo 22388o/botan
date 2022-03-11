@@ -216,6 +216,11 @@ std::vector<uint16_t> Text_Policy::srtp_profiles() const
    return r;
    }
 
+bool Text_Policy::tls_13_middlebox_compatibility_mode() const
+   {
+   return get_bool("tls_13_middlebox_compatibility_mode", Policy::tls_13_middlebox_compatibility_mode());
+   }
+
 void Text_Policy::set(const std::string& k, const std::string& v)
    {
    m_kv[k] = v;

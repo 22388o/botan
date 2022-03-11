@@ -73,12 +73,9 @@ class BOTAN_TEST_API Record_Layer
        */
       ReadResult<Record> next_record(Cipher_State* cipher_state = nullptr);
 
-
       std::vector<uint8_t> prepare_records(const Record_Type type,
                                            const std::vector<uint8_t>& data,
                                            Cipher_State* cipher_state=nullptr);
-
-      std::vector<uint8_t> prepare_dummy_ccs_record();
 
    private:
       std::vector<uint8_t> m_read_buffer;

@@ -354,10 +354,10 @@ secure_vector<uint8_t> Cipher_State::hkdf_expand_label(
    secure_vector<uint8_t> hkdf_label;
    hkdf_label.reserve(2 /* length */ +
                       (label.size() +
-                      6 /* 'tls13 ' */ +
-                      1 /* length field*/) +
+                       6 /* 'tls13 ' */ +
+                       1 /* length field*/) +
                       (context.size() +
-                      1 /* length field*/));
+                       1 /* length field*/));
 
    // length
    BOTAN_ARG_CHECK(length <= std::numeric_limits<uint16_t>::max(), "invalid length");

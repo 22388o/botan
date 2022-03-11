@@ -190,6 +190,17 @@ void Client_Impl_13::handle(const Hello_Retry_Request& hrr)
 
    ch.retry(hrr, callbacks(), rng());
 
+   // RFC 8446 Appendix D.4
+   //    If not offering early data, the client sends a dummy change_cipher_spec
+   //    record [...] immediately before its second flight. This may either be before
+   //    its second ClientHello or before its encrypted handshake flight.
+   //
+   // TODO: once early data support is implemented, this will need to be omitted
+   if(policy().tls_13_middlebox_compatibility_mode())
+      {
+      send_dummy_change_cipher_spec();
+      }
+
    send_handshake_message(ch);
 
    // RFC 8446 4.1.4
@@ -268,6 +279,17 @@ void Client_Impl_13::handle(const Finished_13& finished_msg)
    if(!finished_msg.verify(m_cipher_state.get(),
                            m_transcript_hash.previous()))
       { throw TLS_Exception(Alert::DECRYPT_ERROR, "Finished message didn't verify"); }
+
+   // RFC 8446 Appendix D.4
+   //    If not offering early data, the client sends a dummy change_cipher_spec
+   //    record [...] immediately before its second flight. This may either be before
+   //    its second ClientHello or before its encrypted handshake flight.
+   //
+   // TODO: once early data support is implemented, this will need to be omitted
+   if(policy().tls_13_middlebox_compatibility_mode())
+      {
+      send_dummy_change_cipher_spec();
+      }
 
    // send client finished handshake message (still using handshake traffic secrets)
    send_handshake_message(m_handshake_state.sent(Finished_13(m_cipher_state.get(),

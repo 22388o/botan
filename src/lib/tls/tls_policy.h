@@ -356,6 +356,18 @@ class BOTAN_PUBLIC_API(2,0) Policy
       virtual bool allow_resumption_for_renegotiation() const;
 
       /**
+       * Defines whether or not the middlebox compatibility mode should be
+       * used.
+       *
+       * RFC 8446 Appendix D.4
+       *    [This makes] the TLS 1.3 handshake resemble TLS 1.2 session resumption,
+       *    which improves the chance of successfully connecting through middleboxes.
+       *
+       * Enabled by default.
+       */
+      virtual bool tls_13_middlebox_compatibility_mode() const;
+
+      /**
       * Convert this policy to a printable format.
       * @param o stream to be printed to
       */
@@ -601,6 +613,8 @@ class BOTAN_PUBLIC_API(2,0) Text_Policy : public Policy
       bool hide_unknown_users() const override;
 
       uint32_t session_ticket_lifetime() const override;
+
+      bool tls_13_middlebox_compatibility_mode() const override;
 
       std::vector<uint16_t> srtp_profiles() const override;
 

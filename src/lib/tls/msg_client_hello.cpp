@@ -24,9 +24,10 @@
 
 namespace Botan::TLS {
 
-enum {
+enum
+   {
    TLS_EMPTY_RENEGOTIATION_INFO_SCSV        = 0x00FF,
-};
+   };
 
 std::vector<uint8_t> make_hello_random(RandomNumberGenerator& rng,
                                        const Policy& policy)
@@ -43,7 +44,7 @@ std::vector<uint8_t> make_hello_random(RandomNumberGenerator& rng,
    if(policy.include_time_in_hello_random())
       {
       const uint32_t time32 = static_cast<uint32_t>(
-         std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+                                 std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
 
       store_be(time32, buf.data());
       }
@@ -76,7 +77,7 @@ Client_Hello::Client_Hello(const Policy& policy,
    * which reject hellos when the last extension in the list is empty.
    */
 
-   if (policy.use_extended_master_secret() || policy.allow_tls12() || policy.allow_dtls12())
+   if(policy.use_extended_master_secret() || policy.allow_tls12() || policy.allow_dtls12())
       {
       // EMS must always be used for TLS 1.2 but is optional for TLS 1.3
       m_extensions.add(new Extended_Master_Secret);
@@ -104,7 +105,7 @@ Client_Hello::Client_Hello(const Policy& policy,
       throw Internal_Error("Offering " + m_legacy_version.to_string() +
                            " but our own policy does not accept it");
 
-   if (policy.use_extended_master_secret() || policy.allow_tls12() || policy.allow_dtls12())
+   if(policy.use_extended_master_secret() || policy.allow_tls12() || policy.allow_dtls12())
       {
       /*
       * As EMS must always be used with TLS 1.2, add it even if it wasn't used
@@ -122,7 +123,7 @@ Client_Hello::Client_Hello(const Policy& policy,
 Client_Hello::Client_Hello(const std::vector<uint8_t>& buf)
    {
    if(buf.size() < 41)
-      throw Decoding_Error("Client_Hello: Packet corrupted");
+      { throw Decoding_Error("Client_Hello: Packet corrupted"); }
 
    TLS_Data_Reader reader("ClientHello", buf);
 
@@ -210,7 +211,7 @@ const Extensions& Client_Hello::extensions() const
 void Client_Hello_12::update_hello_cookie(const Hello_Verify_Request& hello_verify)
    {
    if(!m_legacy_version.is_datagram_protocol())
-      throw Invalid_State("Cannot use hello cookie with stream protocol");
+      { throw Invalid_State("Cannot use hello cookie with stream protocol"); }
 
    m_hello_cookie = hello_verify.cookie();
    }
@@ -229,7 +230,7 @@ std::vector<uint8_t> Client_Hello::serialize() const
    append_tls_length_value(buf, m_session_id, 1);
 
    if(m_legacy_version.is_datagram_protocol())
-      append_tls_length_value(buf, m_hello_cookie, 1);
+      { append_tls_length_value(buf, m_hello_cookie, 1); }
 
    append_tls_length_value(buf, m_suites, 2);
    append_tls_length_value(buf, m_comp_methods, 1);
@@ -248,7 +249,7 @@ std::vector<uint8_t> Client_Hello::serialize() const
 std::vector<uint8_t> Client_Hello::cookie_input_data() const
    {
    if(m_cookie_input_bits.empty())
-      throw Invalid_State("Client_Hello::cookie_input_data called but was not computed");
+      { throw Invalid_State("Client_Hello::cookie_input_data called but was not computed"); }
 
    return m_cookie_input_bits;
    }
@@ -276,14 +277,14 @@ std::vector<Signature_Scheme> Client_Hello::signature_schemes() const
 std::vector<Group_Params> Client_Hello::supported_ecc_curves() const
    {
    if(Supported_Groups* groups = m_extensions.get<Supported_Groups>())
-      return groups->ec_groups();
+      { return groups->ec_groups(); }
    return std::vector<Group_Params>();
    }
 
 std::vector<Group_Params> Client_Hello::supported_dh_groups() const
    {
    if(Supported_Groups* groups = m_extensions.get<Supported_Groups>())
-      return groups->dh_groups();
+      { return groups->dh_groups(); }
    return std::vector<Group_Params>();
    }
 
@@ -299,7 +300,7 @@ bool Client_Hello_12::prefers_compressed_ec_points() const
 std::string Client_Hello::sni_hostname() const
    {
    if(Server_Name_Indicator* sni = m_extensions.get<Server_Name_Indicator>())
-      return sni->host_name();
+      { return sni->host_name(); }
    return "";
    }
 
@@ -311,14 +312,14 @@ bool Client_Hello_12::secure_renegotiation() const
 std::vector<uint8_t> Client_Hello_12::renegotiation_info() const
    {
    if(Renegotiation_Extension* reneg = m_extensions.get<Renegotiation_Extension>())
-      return reneg->renegotiation_info();
+      { return reneg->renegotiation_info(); }
    return std::vector<uint8_t>();
    }
 
 std::vector<Protocol_Version> Client_Hello::supported_versions() const
    {
    if(Supported_Versions* versions = m_extensions.get<Supported_Versions>())
-      return versions->versions();
+      { return versions->versions(); }
    return {};
    }
 
@@ -330,7 +331,7 @@ bool Client_Hello_12::supports_session_ticket() const
 std::vector<uint8_t> Client_Hello_12::session_ticket() const
    {
    if(Session_Ticket* ticket = m_extensions.get<Session_Ticket>())
-      return ticket->contents();
+      { return ticket->contents(); }
    return std::vector<uint8_t>();
    }
 
@@ -362,21 +363,21 @@ bool Client_Hello::sent_signature_algorithms() const
 std::vector<std::string> Client_Hello::next_protocols() const
    {
    if(auto alpn = m_extensions.get<Application_Layer_Protocol_Notification>())
-      return alpn->protocols();
+      { return alpn->protocols(); }
    return std::vector<std::string>();
    }
 
 std::vector<uint16_t> Client_Hello::srtp_profiles() const
    {
    if(SRTP_Protection_Profiles* srtp = m_extensions.get<SRTP_Protection_Profiles>())
-      return srtp->profiles();
+      { return srtp->profiles(); }
    return std::vector<uint16_t>();
    }
 
 const std::vector<uint8_t>& Client_Hello::cookie() const
-{
-return m_hello_cookie;
-}
+   {
+   return m_hello_cookie;
+   }
 /*
 * Create a new Hello Request message
 */
@@ -391,7 +392,7 @@ Hello_Request::Hello_Request(Handshake_IO& io)
 Hello_Request::Hello_Request(const std::vector<uint8_t>& buf)
    {
    if(!buf.empty())
-      throw Decoding_Error("Bad Hello_Request, has non-zero size");
+      { throw Decoding_Error("Bad Hello_Request, has non-zero size"); }
    }
 
 /*
@@ -406,37 +407,37 @@ std::vector<uint8_t> Hello_Request::serialize() const
 * Create a new Client Hello message
 */
 Client_Hello_12::Client_Hello_12(Handshake_IO& io,
-                           Handshake_Hash& hash,
-                           const Policy& policy,
-                           Callbacks& cb,
-                           RandomNumberGenerator& rng,
-                           const std::vector<uint8_t>& reneg_info,
-                           const Client_Hello::Settings& client_settings,
-                           const std::vector<std::string>& next_protocols) :
+                                 Handshake_Hash& hash,
+                                 const Policy& policy,
+                                 Callbacks& cb,
+                                 RandomNumberGenerator& rng,
+                                 const std::vector<uint8_t>& reneg_info,
+                                 const Client_Hello::Settings& client_settings,
+                                 const std::vector<std::string>& next_protocols) :
    Client_Hello(policy, cb, rng, reneg_info, client_settings, next_protocols)
    {
    m_extensions.add(new Session_Ticket());
 
    if(policy.negotiate_encrypt_then_mac())
-      m_extensions.add(new Encrypt_then_MAC);
+      { m_extensions.add(new Encrypt_then_MAC); }
 
    m_extensions.add(new Renegotiation_Extension(reneg_info));
 
    m_extensions.add(new Supported_Versions(m_legacy_version, policy));
 
    if(!client_settings.hostname().empty())
-      m_extensions.add(new Server_Name_Indicator(client_settings.hostname()));
+      { m_extensions.add(new Server_Name_Indicator(client_settings.hostname())); }
 
    if(policy.support_cert_status_message())
       m_extensions.add(new Certificate_Status_Request({}, {}));
 
    if(reneg_info.empty() && !next_protocols.empty())
-      m_extensions.add(new Application_Layer_Protocol_Notification(next_protocols));
+      { m_extensions.add(new Application_Layer_Protocol_Notification(next_protocols)); }
 
    m_extensions.add(new Signature_Algorithms(policy.acceptable_signature_schemes()));
 
    if(m_legacy_version.is_datagram_protocol())
-      m_extensions.add(new SRTP_Protection_Profiles(policy.srtp_profiles()));
+      { m_extensions.add(new SRTP_Protection_Profiles(policy.srtp_profiles())); }
 
    auto supported_groups = std::make_unique<Supported_Groups>(policy.key_exchange_groups());
 
@@ -456,17 +457,17 @@ Client_Hello_12::Client_Hello_12(Handshake_IO& io,
 * Create a new Client Hello message (session resumption case)
 */
 Client_Hello_12::Client_Hello_12(Handshake_IO& io,
-                           Handshake_Hash& hash,
-                           const Policy& policy,
-                           Callbacks& cb,
-                           RandomNumberGenerator& rng,
-                           const std::vector<uint8_t>& reneg_info,
-                           const Session& session,
-                           const std::vector<std::string>& next_protocols) :
+                                 Handshake_Hash& hash,
+                                 const Policy& policy,
+                                 Callbacks& cb,
+                                 RandomNumberGenerator& rng,
+                                 const std::vector<uint8_t>& reneg_info,
+                                 const Session& session,
+                                 const std::vector<std::string>& next_protocols) :
    Client_Hello(policy, cb, rng, reneg_info, session, next_protocols)
    {
    if(!value_exists(m_suites, session.ciphersuite_code()))
-      m_suites.push_back(session.ciphersuite_code());
+      { m_suites.push_back(session.ciphersuite_code()); }
 
    m_extensions.add(new Renegotiation_Extension(reneg_info));
    m_extensions.add(new Server_Name_Indicator(session.server_info().hostname()));
@@ -485,12 +486,12 @@ Client_Hello_12::Client_Hello_12(Handshake_IO& io,
    m_extensions.add(supported_groups.release());
 
    if(session.supports_encrypt_then_mac())
-      m_extensions.add(new Encrypt_then_MAC);
+      { m_extensions.add(new Encrypt_then_MAC); }
 
    m_extensions.add(new Signature_Algorithms(policy.acceptable_signature_schemes()));
 
    if(reneg_info.empty() && !next_protocols.empty())
-      m_extensions.add(new Application_Layer_Protocol_Notification(next_protocols));
+      { m_extensions.add(new Application_Layer_Protocol_Notification(next_protocols)); }
 
    cb.tls_modify_extensions(m_extensions, CLIENT);
 
@@ -503,18 +504,24 @@ Client_Hello_12::Client_Hello_12(Handshake_IO& io,
 * Create a new Client Hello message
 */
 Client_Hello_13::Client_Hello_13(const Policy& policy,
-                           Callbacks& cb,
-                           RandomNumberGenerator& rng,
-                           const std::vector<uint8_t>& reneg_info,
-                           const Client_Hello::Settings& client_settings,
-                           const std::vector<std::string>& next_protocols) :
+                                 Callbacks& cb,
+                                 RandomNumberGenerator& rng,
+                                 const std::vector<uint8_t>& reneg_info,
+                                 const Client_Hello::Settings& client_settings,
+                                 const std::vector<std::string>& next_protocols) :
    Client_Hello(policy, cb, rng, reneg_info, client_settings, next_protocols)
    {
    // Always use TLS 1.2 as a legacy version
    m_legacy_version = Protocol_Version::TLS_V12;
 
-   //TODO: Compatibility mode, does not need to be random
-   // m_session_id = make_hello_random(rng, policy);
+   if(policy.tls_13_middlebox_compatibility_mode())
+      {
+      // RFC 8446 4.1.2
+      //    In compatibility mode (see Appendix D.4), this field MUST be non-empty,
+      //    so a client not offering a pre-TLS 1.3 session MUST generate a new
+      //    32-byte value.
+      rng.random_vec(m_session_id, 32);
+      }
 
    // TODO: check when to set these -- setting for rfc8448 now
    m_extensions.add(new Server_Name_Indicator(client_settings.hostname()));
@@ -532,7 +539,7 @@ Client_Hello_13::Client_Hello_13(const Policy& policy,
    // TODO: this is currently hard-coded to PSK_DHE_KE (to please RFC 8448)
    m_extensions.add(new PSK_Key_Exchange_Modes({PSK_Key_Exchange_Mode::PSK_DHE_KE}));
 
-   if (policy.record_size_limit().has_value())
+   if(policy.record_size_limit().has_value())
       {
       m_extensions.add(new Record_Size_Limit(policy.record_size_limit().value()));
       }

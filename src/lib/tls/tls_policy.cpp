@@ -329,6 +329,7 @@ bool Policy::use_extended_master_secret() const { return allow_tls12() || allow_
 std::optional<uint16_t> Policy::record_size_limit() const { return std::nullopt; }
 bool Policy::support_cert_status_message() const { return true; }
 bool Policy::allow_resumption_for_renegotiation() const { return true; }
+bool Policy::tls_13_middlebox_compatibility_mode() const { return true; }
 bool Policy::only_resume_with_exact_version() const { return true; }
 bool Policy::require_client_certificate_authentication() const { return false; }
 bool Policy::request_client_certificate_authentication() const { return require_client_certificate_authentication(); }
@@ -565,6 +566,7 @@ void Policy::print(std::ostream& o) const
    print_bool(o, "negotiate_encrypt_then_mac", negotiate_encrypt_then_mac());
    print_bool(o, "use_extended_master_secret", use_extended_master_secret());
    print_bool(o, "support_cert_status_message", support_cert_status_message());
+   print_bool(o, "tls_13_middlebox_compatibility_mode", tls_13_middlebox_compatibility_mode());
    if (record_size_limit().has_value()) {
       o << "record_size_limit = " << record_size_limit().has_value() << '\n';
    }

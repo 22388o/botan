@@ -131,7 +131,17 @@ std::vector<uint8_t> Record_Layer::prepare_records(const Record_Type type,
       const std::vector<uint8_t>& data,
       Cipher_State* cipher_state)
    {
-   const bool protect = cipher_state != nullptr;
+   // RFC 8446 5.
+   //    Note that [change_cipher_spec records] may appear at a point at the
+   //    handshake where the implementation is expecting protected records.
+   //
+   // RFC 8446 5.
+   //    An implementation which receives [...] a protected change_cipher_spec
+   //    record MUST abort the handshake [...].
+   //
+   // ... hence, CHANGE_CIPHER_SPEC is never protected, even if a usable cipher
+   // state was passed to this method.
+   const bool protect = cipher_state != nullptr && type != Record_Type::CHANGE_CIPHER_SPEC;
 
    BOTAN_ASSERT(!m_initial_record || m_side == Connection_Side::CLIENT,
                 "the initial record is always sent by the client");
@@ -222,14 +232,6 @@ std::vector<uint8_t> Record_Layer::prepare_records(const Record_Type type,
 
    BOTAN_ASSERT_NOMSG(output.size() == output_length);
    return output;
-   }
-
-std::vector<uint8_t> Record_Layer::prepare_dummy_ccs_record()
-   {
-   BOTAN_ASSERT(!m_initial_record, "CCS must not be the initial record");
-
-   std::vector<uint8_t> data = {0x01};
-   return prepare_records(Record_Type::CHANGE_CIPHER_SPEC, data);
    }
 
 

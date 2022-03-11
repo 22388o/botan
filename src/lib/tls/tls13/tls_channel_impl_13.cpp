@@ -153,6 +153,17 @@ void Channel_Impl_13::send_handshake_message(const Handshake_Message_13_Ref mess
    send_record(Record_Type::HANDSHAKE, m_handshake_layer.prepare_message(message, m_transcript_hash));
    }
 
+void Channel_Impl_13::send_dummy_change_cipher_spec()
+   {
+   // RFC 8446 5.
+   //    The change_cipher_spec record is used only for compatibility purposes
+   //    (see Appendix D.4).
+   //
+   // The only allowed CCS message content is 0x01, all other CCS records MUST
+   // be rejected by TLS 1.3 implementations.
+   send_record(Record_Type::CHANGE_CIPHER_SPEC, {0x01});
+   }
+
 void Channel_Impl_13::send(const uint8_t buf[], size_t buf_size)
    {
    if(!is_active())

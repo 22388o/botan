@@ -725,13 +725,127 @@ class Test_TLS_RFC8448 final : public Test
          return result;
          }
 
+      static Test::Result middlebox_compatibility()
+         {
+         Test::Result result("Middlebox Compatibility Mode (Client side)");
+
+         auto rng = std::make_unique<Botan_Tests::Fixed_Output_RNG>("");
+         rng->add_entropy(std::vector<uint8_t>(32).data(), 32);  // used by session mgr for session key
+
+         // for client hello random
+         add_entropy(*rng, "4e640a3f2c2738f09c9418bd78edccd7559d0531199276d4d92a0e9ee9d77d09");
+
+         // for legacy session ID
+         add_entropy(*rng, "a80c165581a8e0d06c0018d54d3a06dd32cfd4051eb026fad3fd0ba99269e6ef");
+
+         // for KeyShare extension (x25519 private key)
+         add_entropy(*rng, "dea00b45695dc781f19d34a62c1afd31ab4369af1e855a3bbb258d8442cde6d7");
+
+         Client_Context ctx(std::move(rng), read_tls_policy("rfc8448_compat"), sort_extensions);
+
+         const auto client_hello = Botan::hex_decode(
+            "16 03 01 00 e0 01 00 00 dc 03 03 4e"
+            "64 0a 3f 2c 27 38 f0 9c 94 18 bd 78 ed cc d7 55 9d 05 31 19 92"
+            "76 d4 d9 2a 0e 9e e9 d7 7d 09 20 a8 0c 16 55 81 a8 e0 d0 6c 00"
+            "18 d5 4d 3a 06 dd 32 cf d4 05 1e b0 26 fa d3 fd 0b a9 92 69 e6"
+            "ef 00 06 13 01 13 03 13 02 01 00 00 8d 00 00 00 0b 00 09 00 00"
+            "06 73 65 72 76 65 72 ff 01 00 01 00 00 0a 00 14 00 12 00 1d 00"
+            "17 00 18 00 19 01 00 01 01 01 02 01 03 01 04 00 33 00 26 00 24"
+            "00 1d 00 20 8e 72 92 cf 30 56 db b0 d2 5f cb e5 5c 10 7d c9 bb"
+            "f8 3d d9 70 8f 39 20 3b a3 41 24 9a 7d 9b 63 00 2b 00 03 02 03"
+            "04 00 0d 00 20 00 1e 04 03 05 03 06 03 02 03 08 04 08 05 08 06"
+            "04 01 05 01 06 01 02 01 04 02 05 02 06 02 02 02 00 2d 00 02 01"
+            "01 00 1c 00 02 40 01");
+
+         result.test_eq("Client Hello", ctx.pull_send_buffer(), client_hello);
+
+         const auto server_hello = Botan::hex_decode(
+            "16 03 03 00 7a 02 00 00 76 03 03 e5"
+            "dd 59 48 c4 35 f7 a3 8f 0f 01 30 70 8d c3 22 d9 df 09 ab d4 83"
+            "81 17 c1 83 a7 bb 6d 99 4f 2c 20 a8 0c 16 55 81 a8 e0 d0 6c 00"
+            "18 d5 4d 3a 06 dd 32 cf d4 05 1e b0 26 fa d3 fd 0b a9 92 69 e6"
+            "ef 13 01 00 00 2e 00 33 00 24 00 1d 00 20 3e 30 f0 f4 ba 55 1a"
+            "fd 62 76 83 41 17 5f 52 65 e4 da f0 c8 84 16 17 aa 4f af dd 21"
+            "42 32 0c 22 00 2b 00 02 03 04");
+         const auto change_cipher_spec = Botan::hex_decode("14 03 03 00 01 01");
+         const auto encrypted_server_handshake = Botan::hex_decode(
+            "17 03 03 02 a2 48 de 89 1d 9c 36 24"
+            "a6 7a 6c 6f 06 01 ab 7a c2 0c 1f 6a 9e 14 d2 e6 00 7e 99 9e 13"
+            "03 67 a8 af 1b cf ea 94 98 fb ce 19 df 45 05 ee ce 3a 25 da 52"
+            "3c be 55 ea 1b 3b da 4e 91 99 5e 45 5d 50 0a 4f aa 62 27 b7 11"
+            "1e 1c 85 47 e2 d7 c1 79 db 21 53 03 d2 58 27 f3 cd 18 f4 8f 64"
+            "91 32 8c f5 c0 f8 14 d3 88 15 0b d9 e9 26 4a ae 49 1d b6 99 50"
+            "69 be a1 76 65 d5 e0 c8 17 28 4d 4a c2 18 80 05 4c 36 57 33 1e"
+            "23 a9 30 4d c8 8a 15 c0 4e c8 0b d3 85 2b f7 f9 d3 c6 61 5b 15"
+            "fa c8 3b bc a0 31 c6 d2 31 0d 9f 5d 7a 4b 02 0a 4f 7c 19 06 2b"
+            "65 c0 5a 1d 32 64 b5 57 ec 9d 8e 0f 7c ee 27 e3 6f 79 30 39 de"
+            "8d d9 6e df ca 90 09 e0 65 10 34 bf f3 1d 7f 34 9e ec e0 1d 99"
+            "fc b5 fc ab 84 0d 77 07 c7 22 99 c3 b5 d0 45 64 e8 80 a3 3c 5e"
+            "84 6c 76 2e 3d 92 2b b5 53 03 d1 d8 7c c0 f0 65 73 f1 7d cb 9b"
+            "8f fd 35 bb d8 83 c1 cb 3a a2 4f cc 32 50 05 f7 68 ce 2f b6 24"
+            "ca 97 b6 c4 d9 8e 17 f3 5b c2 c7 94 0a 06 10 0c 2d 44 8d b7 18"
+            "0b 2d 86 21 64 43 5c 9c 21 0e 98 60 39 4e 05 aa b2 3f f1 b0 20"
+            "3f 66 2c 58 8d a5 bc 44 11 47 7a 30 b4 11 36 c4 88 a0 a6 3f ca"
+            "b5 c1 5a c6 13 22 6d ae 82 7a 1d 1f e9 5e ce 6b 30 bc ee 15 60"
+            "a8 d4 08 d2 64 55 5e 76 0f 9b fc 62 4c 2c 87 fd 04 56 c9 bf b4"
+            "1b cd 1a 7b 21 27 86 d2 b6 7f d5 78 04 fa cf a1 ee f7 cf 29 19"
+            "d8 b9 98 c9 78 9f 76 3b 4d 9c aa 09 3a 9d ed 43 17 5d 46 a7 6b"
+            "4d 54 f0 ce 0c 5d 22 59 b6 07 e3 0a 9d 24 12 63 87 4f a5 9d 6f"
+            "57 0d c4 0d 83 a2 d8 3b f9 e9 85 0d 45 4c 57 80 65 35 a8 99 8a"
+            "e0 35 7d f9 2f 00 b9 66 73 44 c2 41 14 cc c9 ef 53 91 24 b2 04"
+            "e7 e6 e7 48 c3 0a 28 a3 d1 d1 83 99 72 43 ea cc bb d3 3b 0c 11"
+            "15 a0 32 71 06 a1 e6 a7 52 71 d4 98 30 86 f6 32 ff 0e b8 b4 c6"
+            "31 02 cb ce f5 bb 72 da e1 27 9d 5d e8 eb 19 09 6d 8c db 07 fa"
+            "8e a9 89 78 8f ac 23 e6 6e 04 88 c1 93 f3 f3 fe a8 c8 83 88 96"
+            "bf 3a e4 b6 84 8d 42 ce d4 bd f4 1a be 6f c3 31 b4 42 25 e7 a1"
+            "f7 d3 56 41 47 d5 45 8e 71 aa 90 9c b0 2b e9 58 bb c4 2e 3a a5"
+            "a2 7c c6 ea f4 b6 fe 51 ae 44 95 69 4d 8a b6 32 0a ab 92 01 83"
+            "fd 5b 31 a3 59 04 2f bd 67 39 1e c5 e4 d1 89 2a 2e 52 10 14 1a"
+            "49 4e 93 01 b2 4a 11 3c 47 4c 7f 2a 73 45 78 47");
+         ctx.client.received_data(Botan::concat(server_hello,
+                                                change_cipher_spec,
+                                                encrypted_server_handshake));
+
+         const auto encrypted_client_handshake = Botan::hex_decode(
+            "17 03 03 00 35 32 d0 30 e2 73 77 3a"
+            "86 96 c7 99 98 1a f6 ce d0 7f 87 48 2e 81 56 5e 39 4e 87 c8 67"
+            "f3 3d f3 d6 5b 75 06 f1 a6 26 af 91 d4 82 1d 5f 7a 1f 21 0e f8"
+            "dd 3c 6d 16");
+
+         result.test_eq("CCS + Client Finished", ctx.pull_send_buffer(),
+                                                 Botan::concat(change_cipher_spec,
+                                                               encrypted_client_handshake));
+
+         result.confirm("client is ready to send application traffic", ctx.client.is_active());
+
+         ctx.client.close();
+
+         const auto client_close_notify = Botan::hex_decode(
+            "17 03 03 00 13 0f 62 91 55 38 2d ba"
+            "23 c4 e2 c5 f7 f8 4e 6f 2e d3 08 3d");
+         result.test_eq("Client close_notify", ctx.pull_send_buffer(), client_close_notify);
+
+         result.confirm("client cannot send application traffic anymore", !ctx.client.is_active());
+         result.confirm("client is not fully closed yet", !ctx.client.is_closed());
+
+         const auto server_close_notify = Botan::hex_decode(
+            "17 03 03 00 13 b7 25 7b 0f ec af 69"
+            "d4 f0 9e 3f 89 1e 2a 25 d1 e2 88 45");
+         ctx.client.received_data(server_close_notify);
+
+         result.confirm("client connection was terminated", ctx.client.is_closed());
+
+         return result;
+         }
+
    public:
       std::vector<Test::Result> run() override
          {
          return
             {
             simple_1_rtt_client_hello(),
-            hello_retry_request()
+            hello_retry_request(),
+            middlebox_compatibility()
             };
          }
    };
