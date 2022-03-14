@@ -27,12 +27,14 @@ class Channel_Impl_13 : public Channel_Impl
       * @param callbacks contains a set of callback function references
       *        required by the TLS endpoint.
       * @param session_manager manages session state
+      * @param credentials_manager manages application/user credentials
       * @param rng a random number generator
       * @param policy specifies other connection policy information
       * @param is_server whether this is a server session or not
       */
       explicit Channel_Impl_13(Callbacks& callbacks,
                                Session_Manager& session_manager,
+                               Credentials_Manager& credentials_manager,
                                RandomNumberGenerator& rng,
                                const Policy& policy,
                                bool is_server,
@@ -119,6 +121,7 @@ class Channel_Impl_13 : public Channel_Impl
 
       Callbacks& callbacks() const { return m_callbacks; }
       Session_Manager& session_manager() { return m_session_manager; }
+      Credentials_Manager& credentials_manager() { return m_credentials_manager; }
       RandomNumberGenerator& rng() { return m_rng; }
       const Policy& policy() const { return m_policy; }
 
@@ -138,12 +141,22 @@ class Channel_Impl_13 : public Channel_Impl
       Transcript_Hash_State m_transcript_hash;
       std::unique_ptr<Cipher_State> m_cipher_state;
 
+      /**
+       * Indicate that this (Client_Impl_13) instance has to expect a downgrade to TLS 1.2.
+       *
+       * This will prepare an internal structure where any information required to downgrade
+       * can be preserved.
+       * @sa `Channel_Impl::Downgrade_Information`
+       */
+      void expect_downgrade(const Server_Information& server_info);
+
    private:
       /* callbacks */
       Callbacks& m_callbacks;
 
       /* external state */
       Session_Manager& m_session_manager;
+      Credentials_Manager& m_credentials_manager;
       RandomNumberGenerator& m_rng;
       const Policy& m_policy;
 

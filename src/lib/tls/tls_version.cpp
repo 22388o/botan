@@ -34,6 +34,13 @@ bool Protocol_Version::is_datagram_protocol() const
    return major_version() > 250;
    }
 
+bool Protocol_Version::is_pre_tls_13() const
+   {
+   return (!is_datagram_protocol() && *this <= Protocol_Version::TLS_V12) ||
+          ( is_datagram_protocol() && *this <= Protocol_Version::DTLS_V12);
+   }
+
+
 bool Protocol_Version::operator>(const Protocol_Version& other) const
    {
    if(this->is_datagram_protocol() != other.is_datagram_protocol())

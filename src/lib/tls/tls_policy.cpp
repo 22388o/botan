@@ -268,16 +268,18 @@ uint32_t Policy::session_ticket_lifetime() const
 
 bool Policy::acceptable_protocol_version(Protocol_Version version) const
    {
-   if(version == Protocol_Version::TLS_V12 && allow_tls12())
-      return true;
-
 #if defined(BOTAN_HAS_TLS_13)
    if(version == Protocol_Version::TLS_V13 && allow_tls13())
       return true;
 #endif
 
+#if defined(BOTAN_HAS_TLS_12)
+   if(version == Protocol_Version::TLS_V12 && allow_tls12())
+      return true;
+
    if(version == Protocol_Version::DTLS_V12 && allow_dtls12())
       return true;
+#endif
 
    return false;
    }
@@ -311,7 +313,14 @@ bool Policy::acceptable_ciphersuite(const Ciphersuite& ciphersuite) const
 bool Policy::allow_client_initiated_renegotiation() const { return false; }
 bool Policy::allow_server_initiated_renegotiation() const { return false; }
 bool Policy::allow_insecure_renegotiation() const { return false; }
-bool Policy::allow_tls12()  const { return true; }
+bool Policy::allow_tls12() const
+   {
+#if defined(BOTAN_HAS_TLS_12)
+   return true;
+#else
+   return false;
+#endif
+   }
 bool Policy::allow_tls13() const
    {
 #if defined(BOTAN_HAS_TLS_13)
@@ -320,7 +329,14 @@ bool Policy::allow_tls13() const
    return false;
 #endif
    }
-bool Policy::allow_dtls12() const { return true; }
+bool Policy::allow_dtls12() const
+   {
+#if defined(BOTAN_HAS_TLS_12)
+   return true;
+#else
+   return false;
+#endif
+   }
 bool Policy::include_time_in_hello_random() const { return true; }
 bool Policy::hide_unknown_users() const { return false; }
 bool Policy::server_uses_own_ciphersuite_preferences() const { return true; }

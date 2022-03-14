@@ -52,7 +52,18 @@ Client::~Client() = default;
 
 size_t Client::received_data(const uint8_t buf[], size_t buf_size)
    {
-   return m_impl->received_data(buf, buf_size);
+   auto read = m_impl->received_data(buf, buf_size);
+
+   if(m_impl->is_downgrading())
+      {
+      auto info = m_impl->extract_downgrade_info();
+      m_impl = std::make_unique<Client_Impl_12>(*info);
+
+      // replay peer data received so far
+      read = m_impl->received_data(info->peer_transcript.data(), info->peer_transcript.size());
+      }
+
+   return read;
    }
 
 bool Client::is_active() const

@@ -102,6 +102,11 @@ class BOTAN_PUBLIC_API(2,0) Protocol_Version final
       bool is_datagram_protocol() const;
 
       /**
+       * @return true if this version indicates (D)TLS 1.2 or older
+       */
+      bool is_pre_tls_13() const;
+
+      /**
       * @return if this version is equal to other
       */
       bool operator==(const Protocol_Version& other) const

@@ -22,6 +22,12 @@ Server_Hello_13& Handshake_State_13_Base::store(Server_Hello_13 server_hello, co
     return m_server_hello.value();
 }
 
+Server_Hello_12& Handshake_State_13_Base::store(Server_Hello_12 server_hello, const bool)
+{
+    m_server_hello_12 = std::move(server_hello);
+    return m_server_hello_12.value();
+}
+
 Hello_Retry_Request& Handshake_State_13_Base::store(Hello_Retry_Request hello_retry_request, const bool)
 {
     m_hello_retry_request = std::move(hello_retry_request);

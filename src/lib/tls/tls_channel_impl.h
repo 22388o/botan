@@ -19,12 +19,15 @@
 
 namespace Botan {
 
+class Credentials_Manager;
 class X509_Certificate;
 
 namespace TLS {
 
 class Handshake_State;
 class Handshake_IO;
+
+class Client_Hello_12;
 
 class Channel_Impl
    {
@@ -114,6 +117,66 @@ class Channel_Impl
       virtual bool timeout_check() = 0;
 
       virtual std::string application_protocol() const = 0;
+
+   protected:
+      /**
+       * This struct collect all information required to perform a downgrade from TLS 1.3 to TLS 1.2.
+       *
+       * The downgrade process is (currently) triggered when a TLS 1.3 client receives a downgrade request
+       * in the server hello message (@sa `Client_Impl_13::handle(Server_Hello_12)`). As a result,
+       * `Client::received_data` should detect this condition and replace its `Channel_Impl_13` member by a
+       * `Channel_Impl_12`.
+       *
+       * Note that the downgrade process for the server implementation will likely differ.
+       */
+      struct Downgrade_Information
+         {
+         /// The client hello message including the handshake header bytes as transferred to the peer.
+         std::vector<uint8_t> client_hello_message;
+
+         /// The full data transcript received from the peer. This will contain the server hello message that forced us to downgrade.
+         std::vector<uint8_t> peer_transcript;
+
+         Server_Information server_info;
+
+         Callbacks& callbacks;
+         Session_Manager& session_manager;
+         Credentials_Manager& creds;
+         RandomNumberGenerator& rng;
+         const Policy& policy;
+
+         bool will_downgrade;
+         };
+
+      std::unique_ptr<Downgrade_Information> m_downgrade_info;
+
+      void preserve_peer_transcript(const uint8_t input[], size_t input_size)
+         {
+         BOTAN_STATE_CHECK(m_downgrade_info);
+         m_downgrade_info->peer_transcript.insert(m_downgrade_info->peer_transcript.end(),
+                                                  input, input+input_size);
+         }
+
+      void preserve_client_hello(const std::vector<uint8_t>& msg)
+         {
+         BOTAN_STATE_CHECK(m_downgrade_info);
+         m_downgrade_info->client_hello_message = msg;
+         }
+
+   public:
+      /**
+       * Indicates whether a downgrade to TLS 1.2 or lower is in progress
+       *
+       * @sa Downgrade_Information
+       */
+      bool is_downgrading() const { return m_downgrade_info && m_downgrade_info->will_downgrade; }
+
+      /**
+       * @sa Downgrade_Information
+       */
+      std::unique_ptr<Downgrade_Information> extract_downgrade_info() { return std::exchange(m_downgrade_info, {}); }
+
+      bool expects_downgrade() const { return m_downgrade_info != nullptr; }
    };
 
 }

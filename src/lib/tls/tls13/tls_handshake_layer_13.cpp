@@ -59,7 +59,7 @@ Handshake_Message_13 Handshake_Layer::parse_message(
       case CLIENT_HELLO:
          return Client_Hello_13(msg);
       case SERVER_HELLO:
-         // SERVER_HELLO might be either an actual server_hello or a
+         // SERVER_HELLO might be either an actual server_hello (1.2 or 1.3) or a
          // hello_retry_request. Hence, this construction is exceptionally
          // funneled through a factory method and then transformed into a
          // generic Handshake_Message_13.

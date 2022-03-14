@@ -41,6 +41,7 @@ class BOTAN_TEST_API Handshake_State_13_Base
 
       Client_Hello_13&       store(Client_Hello_13 client_hello, const bool from_peer);
       Server_Hello_13&       store(Server_Hello_13 server_hello, const bool from_peer);
+      Server_Hello_12&       store(Server_Hello_12 server_hello, const bool from_peer);
       Hello_Retry_Request&   store(Hello_Retry_Request hello_retry_request, const bool from_peer);
       Encrypted_Extensions&  store(Encrypted_Extensions encrypted_extensions, const bool from_peer);
       Certificate_13&        store(Certificate_13 certificate, const bool from_peer);
@@ -70,6 +71,7 @@ class BOTAN_TEST_API Handshake_State_13_Base
 
       std::optional<Client_Hello_13> m_client_hello;
       std::optional<Server_Hello_13> m_server_hello;
+      std::optional<Server_Hello_12> m_server_hello_12;
       std::optional<Hello_Retry_Request> m_hello_retry_request;
       std::optional<Encrypted_Extensions> m_encrypted_extensions;
       std::optional<Certificate_13> m_server_certs;

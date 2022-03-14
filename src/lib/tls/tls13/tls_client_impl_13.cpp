@@ -12,6 +12,7 @@
 #include <botan/internal/tls_cipher_state.h>
 #include <botan/tls_client.h>
 #include <botan/tls_messages.h>
+#include <botan/build.h>
 
 #include <iterator>
 
@@ -26,11 +27,15 @@ Client_Impl_13::Client_Impl_13(Callbacks& callbacks,
                                const Protocol_Version& offer_version,
                                const std::vector<std::string>& next_protocols,
                                size_t io_buf_sz) :
-   Channel_Impl_13(callbacks, session_manager, rng, policy, false, io_buf_sz),
-   m_creds(creds),
+   Channel_Impl_13(callbacks, session_manager, creds, rng, policy, false, io_buf_sz),
    m_info(info)
    {
-   BOTAN_UNUSED(m_creds, offer_version); // TODO: fixme
+   BOTAN_ASSERT_NOMSG(offer_version == Protocol_Version::TLS_V13);
+
+#if defined(BOTAN_HAS_TLS_12)
+   if(policy.allow_tls12())
+      expect_downgrade(info);
+#endif
 
    Client_Hello::Settings client_settings(TLS::Protocol_Version::TLS_V13, m_info.hostname());
    send_handshake_message(m_handshake_state.sent(Client_Hello_13(
@@ -105,6 +110,47 @@ void validate_server_hello_ish(const Client_Hello_13& ch, const Server_Hello_13&
       }
    }
 }
+
+void Client_Impl_13::handle(const Server_Hello_12& server_hello_msg)
+   {
+   if(m_handshake_state.has_hello_retry_request())
+      {
+      throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "Version downgrade received after Hello Retry");
+      }
+
+   // RFC 8446 4.1.3
+   //    TLS 1.3 clients receiving a ServerHello indicating TLS 1.2 or below
+   //    MUST check that the last 8 bytes are not equal to either [the TLS 1.2
+   //    or TLS 1.1 indicator].
+   if(server_hello_msg.random_signals_downgrade().has_value())
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Downgrade attack detected");
+      }
+
+   // RFC 8446 4.2.1
+   //    A server which negotiates a version of TLS prior to TLS 1.3 [...]
+   //    MUST NOT send the "supported_versions" extension.
+   //
+   // Note that this condition should never happen, as the Server_Hello parsing
+   // code decides to create a Server_Hello_12 based on the absense of this extension.
+   if(server_hello_msg.extensions().has<Supported_Versions>())
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Unexpected extension received");
+      }
+
+   const auto& client_hello_exts = m_handshake_state.client_hello().extensions();
+   BOTAN_ASSERT_NOMSG(client_hello_exts.has<Supported_Versions>());
+   if(!client_hello_exts.get<Supported_Versions>()->supports(server_hello_msg.selected_version()))
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol_Version was not offered");
+      }
+
+   BOTAN_ASSERT_NOMSG(expects_downgrade());
+
+   // After this, no further messages are expected here because this instance will be replaced
+   // by a Client_Impl_12.
+   m_transitions.set_expected_next({});
+   }
 
 void Client_Impl_13::handle(const Server_Hello_13& sh)
    {
@@ -186,7 +232,8 @@ void Client_Impl_13::handle(const Hello_Retry_Request& hrr)
    auto cipher = Ciphersuite::by_id(hrr.ciphersuite());
    BOTAN_ASSERT_NOMSG(cipher.has_value());  // should work, since we offered this suite
 
-   m_transcript_hash = Transcript_Hash_State::recreate_after_hello_retry_request(cipher.value().prf_algo(), m_transcript_hash);
+   m_transcript_hash = Transcript_Hash_State::recreate_after_hello_retry_request(cipher.value().prf_algo(),
+                       m_transcript_hash);
 
    ch.retry(hrr, callbacks(), rng());
 
@@ -240,7 +287,7 @@ void Client_Impl_13::handle(const Certificate_13& certificate_msg)
    if(server_certs.empty())
       { throw TLS_Exception(Alert::DECODE_ERROR, "Client: No certificates sent by server"); }
 
-   auto trusted_CAs = m_creds.trusted_certificate_authorities("tls-client", m_info.hostname());
+   auto trusted_CAs = credentials_manager().trusted_certificate_authorities("tls-client", m_info.hostname());
 
    std::vector<X509_Certificate> certs;
    std::transform(server_certs.cbegin(), server_certs.cend(), std::back_inserter(certs),

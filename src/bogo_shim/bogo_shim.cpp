@@ -98,6 +98,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Client offered DTLS version with major version 0xFF",  ":UNSUPPORTED_PROTOCOL:" },
          { "Client offered SSLv3 which is not supported", ":UNSUPPORTED_PROTOCOL:" },
          { "Client offered TLS version with major version under 3", ":UNSUPPORTED_PROTOCOL:" },
+         { "Expected server hello of (D)TLS 1.2 or lower", ":UNSUPPORTED_PROTOCOL:" },
          { "Client policy prohibits insecure renegotiation", ":RENEGOTIATION_MISMATCH:" },
          { "Client policy prohibits renegotiation", ":NO_RENEGOTIATION:" },
          { "Client resumed extended ms session without sending extension", ":RESUMED_EMS_SESSION_WITHOUT_EMS_EXTENSION:" },

@@ -28,8 +28,6 @@ namespace {
 const uint64_t DOWNGRADE_TLS11 = 0x444F574E47524400;
 const uint64_t DOWNGRADE_TLS12 = 0x444F574E47524401;
 
-#if defined(BOTAN_HAS_TLS_13)
-
 // SHA-256("HelloRetryRequest")
 const std::array<uint8_t, 32> HELLO_RETRY_REQUEST_MARKER =
    {
@@ -38,7 +36,10 @@ const std::array<uint8_t, 32> HELLO_RETRY_REQUEST_MARKER =
    0x07, 0x9E, 0x09, 0xE2, 0xC8, 0xA8, 0x33, 0x9C
    };
 
-#endif
+bool random_signals_hello_retry_request(const std::vector<uint8_t> &random)
+   {
+   return constant_time_compare(random.data(), HELLO_RETRY_REQUEST_MARKER.data(), HELLO_RETRY_REQUEST_MARKER.size());
+   }
 
 std::vector<uint8_t>
 make_server_hello_random(RandomNumberGenerator& rng,
@@ -52,6 +53,136 @@ make_server_hello_random(RandomNumberGenerator& rng,
 
 }
 
+/*
+* Deserialize a Server Hello message
+*/
+Server_Hello::Internal::Internal(const std::vector<uint8_t>& buf)
+   {
+   if(buf.size() < 38)
+      {
+      throw Decoding_Error("Server_Hello: Packet corrupted");
+      }
+
+   TLS_Data_Reader reader("ServerHello", buf);
+
+   const uint8_t major_version = reader.get_byte();
+   const uint8_t minor_version = reader.get_byte();
+
+   legacy_version = Protocol_Version(major_version, minor_version);
+
+   // RFC 8446 4.1.3
+   //    Upon receiving a message with type server_hello, implementations MUST
+   //    first examine the Random value and, if it matches this value, process
+   //    it as described in Section 4.1.4 [Hello Retry Request]).
+   random = reader.get_fixed<uint8_t>(32);
+   is_hello_retry_request = random_signals_hello_retry_request(random);
+
+   session_id = reader.get_range<uint8_t>(1, 0, 32);
+   ciphersuite = reader.get_uint16_t();
+   comp_method = reader.get_byte();
+
+   // Note that this code path might parse a TLS 1.2 (or older) server hello message that
+   // is nevertheless marked as being a 'hello retry request' (potentially maliciously).
+   // Extension parsing will however not be affected by the associated flag.
+   // Only after parsing the extensions will the upstream code be able to decide
+   // whether we're dealing with TLS 1.3 or older.
+   extensions.deserialize(reader, Connection_Side::SERVER, is_hello_retry_request);
+   }
+
+
+Server_Hello::Internal::Internal(Protocol_Version lv,
+                                 std::vector<uint8_t> sid,
+                                 std::vector<uint8_t> r,
+                                 const uint16_t cs,
+                                 const uint8_t cm)
+   : legacy_version(std::move(lv))
+   , session_id(std::move(sid))
+   , random(std::move(r))
+   , ciphersuite(cs)
+   , comp_method(cm) {}
+
+
+Protocol_Version Server_Hello::Internal::version() const
+   {
+   // RFC 8446 4.2.1
+   //    A server which negotiates a version of TLS prior to TLS 1.3 MUST set
+   //    ServerHello.version and MUST NOT send the "supported_versions"
+   //    extension.  A server which negotiates TLS 1.3 MUST respond by sending
+   //    a "supported_versions" extension containing the selected version
+   //    value (0x0304).
+   //
+   // Note: Here we just take a message parsing decision, further validation of
+   //       the extension's contents is done later.
+   return (extensions.has<Supported_Versions>())
+      ? Protocol_Version::TLS_V13
+      : legacy_version;
+   }
+
+
+/*
+* Serialize a Server Hello message
+*/
+std::vector<uint8_t> Server_Hello::serialize() const
+   {
+   std::vector<uint8_t> buf;
+
+   buf.push_back(m_data->legacy_version.major_version());
+   buf.push_back(m_data->legacy_version.minor_version());
+   buf += m_data->random;
+
+   append_tls_length_value(buf, m_data->session_id, 1);
+
+   buf.push_back(get_byte<0>(m_data->ciphersuite));
+   buf.push_back(get_byte<1>(m_data->ciphersuite));
+
+   buf.push_back(m_data->comp_method);
+
+   buf += m_data->extensions.serialize(Connection_Side::SERVER);
+
+   return buf;
+   }
+
+
+Handshake_Type Server_Hello::type() const
+   {
+   return SERVER_HELLO;
+   }
+
+Protocol_Version Server_Hello::legacy_version() const
+   {
+   return m_data->legacy_version;
+   }
+
+const std::vector<uint8_t>& Server_Hello::random() const
+   {
+   return m_data->random;
+   }
+
+uint8_t Server_Hello::compression_method() const
+   {
+   return m_data->comp_method;
+   }
+
+const std::vector<uint8_t>& Server_Hello::session_id() const
+   {
+   return m_data->session_id;
+   }
+
+uint16_t Server_Hello::ciphersuite() const
+   {
+   return m_data->ciphersuite;
+   }
+
+std::set<Handshake_Extension_Type> Server_Hello::extension_types() const
+   {
+   return m_data->extensions.extension_types();
+   }
+
+const Extensions& Server_Hello::extensions() const
+   {
+   return m_data->extensions;
+   }
+
 // New session case
 Server_Hello_12::Server_Hello_12(Handshake_IO& io,
                                  Handshake_Hash& hash,
@@ -62,51 +193,52 @@ Server_Hello_12::Server_Hello_12(Handshake_IO& io,
                                  const Client_Hello_12& client_hello,
                                  const Server_Hello_12::Settings& server_settings,
                                  const std::string& next_protocol) :
-   Server_Hello(server_settings.protocol_version(),
-                server_settings.session_id(),
-                make_server_hello_random(rng, server_settings.protocol_version(), policy),
-                server_settings.ciphersuite(),
-                0)
+   Server_Hello(std::make_unique<Server_Hello::Internal>(
+                  server_settings.protocol_version(),
+                  server_settings.session_id(),
+                  make_server_hello_random(rng, server_settings.protocol_version(), policy),
+                  server_settings.ciphersuite(),
+                  uint8_t(0)))
    {
    if(client_hello.supports_extended_master_secret())
       {
-      m_extensions.add(new Extended_Master_Secret);
+      m_data->extensions.add(new Extended_Master_Secret);
       }
 
    // Sending the extension back does not commit us to sending a stapled response
    if(client_hello.supports_cert_status_message() && policy.support_cert_status_message())
       {
-      m_extensions.add(new Certificate_Status_Request);
+      m_data->extensions.add(new Certificate_Status_Request);
       }
 
    if(!next_protocol.empty() && client_hello.supports_alpn())
       {
-      m_extensions.add(new Application_Layer_Protocol_Notification(next_protocol));
+      m_data->extensions.add(new Application_Layer_Protocol_Notification(next_protocol));
       }
 
-   const auto c = Ciphersuite::by_id(m_ciphersuite);
+   const auto c = Ciphersuite::by_id(m_data->ciphersuite);
 
    if(c && c->cbc_ciphersuite() && client_hello.supports_encrypt_then_mac() && policy.negotiate_encrypt_then_mac())
       {
-      m_extensions.add(new Encrypt_then_MAC);
+      m_data->extensions.add(new Encrypt_then_MAC);
       }
 
    if(c && c->ecc_ciphersuite() && client_hello.extension_types().count(TLSEXT_EC_POINT_FORMATS))
       {
-      m_extensions.add(new Supported_Point_Formats(policy.use_ecc_point_compression()));
+      m_data->extensions.add(new Supported_Point_Formats(policy.use_ecc_point_compression()));
       }
 
    if(client_hello.secure_renegotiation())
       {
-      m_extensions.add(new Renegotiation_Extension(reneg_info));
+      m_data->extensions.add(new Renegotiation_Extension(reneg_info));
       }
 
    if(client_hello.supports_session_ticket() && server_settings.offer_session_ticket())
       {
-      m_extensions.add(new Session_Ticket());
+      m_data->extensions.add(new Session_Ticket());
       }
 
-   if(m_legacy_version.is_datagram_protocol())
+   if(m_data->legacy_version.is_datagram_protocol())
       {
       const std::vector<uint16_t> server_srtp = policy.srtp_profiles();
       const std::vector<uint16_t> client_srtp = client_hello.srtp_profiles();
@@ -124,12 +256,12 @@ Server_Hello_12::Server_Hello_12(Handshake_IO& io,
 
          if(shared)
             {
-            m_extensions.add(new SRTP_Protection_Profiles(shared));
+            m_data->extensions.add(new SRTP_Protection_Profiles(shared));
             }
          }
       }
 
-   cb.tls_modify_extensions(m_extensions, SERVER);
+   cb.tls_modify_extensions(m_data->extensions, SERVER);
 
    hash.update(io.send(*this));
    }
@@ -145,20 +277,21 @@ Server_Hello_12::Server_Hello_12(Handshake_IO& io,
                                  Session& resumed_session,
                                  bool offer_session_ticket,
                                  const std::string& next_protocol) :
-   Server_Hello(resumed_session.version(),
-                client_hello.session_id(),
-                make_hello_random(rng, policy),
-                resumed_session.ciphersuite_code(),
-                0)
+   Server_Hello(std::make_unique<Server_Hello::Internal>(
+                  resumed_session.version(),
+                  client_hello.session_id(),
+                  make_hello_random(rng, policy),
+                  resumed_session.ciphersuite_code(),
+                  uint8_t(0)))
    {
    if(client_hello.supports_extended_master_secret())
       {
-      m_extensions.add(new Extended_Master_Secret);
+      m_data->extensions.add(new Extended_Master_Secret);
       }
 
    if(!next_protocol.empty() && client_hello.supports_alpn())
       {
-      m_extensions.add(new Application_Layer_Protocol_Notification(next_protocol));
+      m_data->extensions.add(new Application_Layer_Protocol_Notification(next_protocol));
       }
 
    if(client_hello.supports_encrypt_then_mac() && policy.negotiate_encrypt_then_mac())
@@ -166,124 +299,84 @@ Server_Hello_12::Server_Hello_12(Handshake_IO& io,
       Ciphersuite c = resumed_session.ciphersuite();
       if(c.cbc_ciphersuite())
          {
-         m_extensions.add(new Encrypt_then_MAC);
+         m_data->extensions.add(new Encrypt_then_MAC);
          }
       }
 
    if(resumed_session.ciphersuite().ecc_ciphersuite() && client_hello.extension_types().count(TLSEXT_EC_POINT_FORMATS))
       {
-      m_extensions.add(new Supported_Point_Formats(policy.use_ecc_point_compression()));
+      m_data->extensions.add(new Supported_Point_Formats(policy.use_ecc_point_compression()));
       }
 
    if(client_hello.secure_renegotiation())
       {
-      m_extensions.add(new Renegotiation_Extension(reneg_info));
+      m_data->extensions.add(new Renegotiation_Extension(reneg_info));
       }
 
    if(client_hello.supports_session_ticket() && offer_session_ticket)
       {
-      m_extensions.add(new Session_Ticket());
+      m_data->extensions.add(new Session_Ticket());
       }
 
-   cb.tls_modify_extensions(m_extensions, SERVER);
+   cb.tls_modify_extensions(m_data->extensions, SERVER);
 
    hash.update(io.send(*this));
    }
 
-/*
-* Deserialize a Server Hello message
-*/
-Server_Hello::Server_Hello(const std::vector<uint8_t>& buf,
-                           const bool is_hello_retry_request)
+
+Server_Hello_12::Server_Hello_12(const std::vector<uint8_t> &buf)
+   : Server_Hello_12(std::make_unique<Server_Hello::Internal>(buf))
+   {}
+
+Server_Hello_12::Server_Hello_12(std::unique_ptr<Server_Hello::Internal> data)
+   : Server_Hello(std::move(data))
    {
-   if(buf.size() < 38)
+   if(!m_data->version().is_pre_tls_13())
       {
-      throw Decoding_Error("Server_Hello: Packet corrupted");
+      throw TLS_Exception(Alert::PROTOCOL_VERSION, "Expected server hello of (D)TLS 1.2 or lower");
       }
-
-   TLS_Data_Reader reader("ServerHello", buf);
-
-   const uint8_t major_version = reader.get_byte();
-   const uint8_t minor_version = reader.get_byte();
-
-   m_legacy_version = Protocol_Version(major_version, minor_version);
-
-   m_random = reader.get_fixed<uint8_t>(32);
-
-   m_session_id = reader.get_range<uint8_t>(1, 0, 32);
-
-   m_ciphersuite = reader.get_uint16_t();
-
-   m_comp_method = reader.get_byte();
-
-   m_extensions.deserialize(reader, Connection_Side::SERVER, is_hello_retry_request);
    }
 
-Handshake_Type Server_Hello::type() const
+Protocol_Version Server_Hello_12::selected_version() const
    {
-   return SERVER_HELLO;
-   }
-
-Protocol_Version Server_Hello::legacy_version() const
-   {
-   return m_legacy_version;
-   }
-
-const std::vector<uint8_t>& Server_Hello::random() const
-   {
-   return m_random;
-   }
-
-uint8_t Server_Hello::compression_method() const
-   {
-   return m_comp_method;
-   }
-
-const std::vector<uint8_t>& Server_Hello::session_id() const
-   {
-   return m_session_id;
-   }
-
-uint16_t Server_Hello::ciphersuite() const
-   {
-   return m_ciphersuite;
+   return legacy_version();
    }
 
 bool Server_Hello_12::secure_renegotiation() const
    {
-   return m_extensions.has<Renegotiation_Extension>();
+   return m_data->extensions.has<Renegotiation_Extension>();
    }
 
 std::vector<uint8_t> Server_Hello_12::renegotiation_info() const
    {
-   if(Renegotiation_Extension* reneg = m_extensions.get<Renegotiation_Extension>())
+   if(Renegotiation_Extension* reneg = m_data->extensions.get<Renegotiation_Extension>())
       { return reneg->renegotiation_info(); }
    return std::vector<uint8_t>();
    }
 
 bool Server_Hello_12::supports_extended_master_secret() const
    {
-   return m_extensions.has<Extended_Master_Secret>();
+   return m_data->extensions.has<Extended_Master_Secret>();
    }
 
 bool Server_Hello_12::supports_encrypt_then_mac() const
    {
-   return m_extensions.has<Encrypt_then_MAC>();
+   return m_data->extensions.has<Encrypt_then_MAC>();
    }
 
 bool Server_Hello_12::supports_certificate_status_message() const
    {
-   return m_extensions.has<Certificate_Status_Request>();
+   return m_data->extensions.has<Certificate_Status_Request>();
    }
 
 bool Server_Hello_12::supports_session_ticket() const
    {
-   return m_extensions.has<Session_Ticket>();
+   return m_data->extensions.has<Session_Ticket>();
    }
 
 uint16_t Server_Hello_12::srtp_profile() const
    {
-   if(auto srtp = m_extensions.get<SRTP_Protection_Profiles>())
+   if(auto srtp = m_data->extensions.get<SRTP_Protection_Profiles>())
       {
       auto prof = srtp->profiles();
       if(prof.size() != 1 || prof[0] == 0)
@@ -296,26 +389,16 @@ uint16_t Server_Hello_12::srtp_profile() const
 
 std::string Server_Hello_12::next_protocol() const
    {
-   if(auto alpn = m_extensions.get<Application_Layer_Protocol_Notification>())
+   if(auto alpn = m_data->extensions.get<Application_Layer_Protocol_Notification>())
       {
       return alpn->single_protocol();
       }
    return "";
    }
 
-std::set<Handshake_Extension_Type> Server_Hello::extension_types() const
-   {
-   return m_extensions.extension_types();
-   }
-
-const Extensions& Server_Hello::extensions() const
-   {
-   return m_extensions;
-   }
-
 bool Server_Hello_12::prefers_compressed_ec_points() const
    {
-   if(auto ecc_formats = m_extensions.get<Supported_Point_Formats>())
+   if(auto ecc_formats = m_data->extensions.get<Supported_Point_Formats>())
       {
       return ecc_formats->prefers_compressed();
       }
@@ -325,7 +408,7 @@ bool Server_Hello_12::prefers_compressed_ec_points() const
 // TODO: this should have a specific implementation for 1.2/1.3
 std::optional<Protocol_Version> Server_Hello_12::random_signals_downgrade() const
    {
-   const uint64_t last8 = load_be<uint64_t>(m_random.data(), 3);
+   const uint64_t last8 = load_be<uint64_t>(m_data->random.data(), 3);
    if(last8 == DOWNGRADE_TLS11)
       { return Protocol_Version::TLS_V11; }
    if(last8 == DOWNGRADE_TLS12)
@@ -334,28 +417,6 @@ std::optional<Protocol_Version> Server_Hello_12::random_signals_downgrade() cons
    return std::nullopt;
    }
 
-/*
-* Serialize a Server Hello message
-*/
-std::vector<uint8_t> Server_Hello::serialize() const
-   {
-   std::vector<uint8_t> buf;
-
-   buf.push_back(m_legacy_version.major_version());
-   buf.push_back(m_legacy_version.minor_version());
-   buf += m_random;
-
-   append_tls_length_value(buf, m_session_id, 1);
-
-   buf.push_back(get_byte<0>(m_ciphersuite));
-   buf.push_back(get_byte<1>(m_ciphersuite));
-
-   buf.push_back(m_comp_method);
-
-   buf += m_extensions.serialize(Connection_Side::SERVER);
-
-   return buf;
-   }
 
 /*
 * Create a new Server Hello Done message
@@ -386,28 +447,36 @@ std::vector<uint8_t> Server_Hello_Done::serialize() const
 #if defined(BOTAN_HAS_TLS_13)
 
 
-std::variant<Hello_Retry_Request, Server_Hello_13>
+std::variant<Hello_Retry_Request, Server_Hello_13, Server_Hello_12>
 Server_Hello_13::parse(const std::vector<uint8_t>& buf)
    {
    TLS_Data_Reader reader("Server_Hello_13::parse", buf);
 
-   reader.discard_next(2); // legacy version
+   auto data = std::make_unique<Server_Hello::Internal>(buf);
+   const auto version = data->version();
 
-   // RFC 8446 4.1.3
-   //    Upon receiving a message with type server_hello, implementations MUST
-   //    first examine the Random value and, if it matches this value, process
-   //    it as described in Section 4.1.4 [Hello Retry Request]).
-   const auto random = reader.get_fixed<uint8_t>(32);
-   if(constant_time_compare(random.data(), HELLO_RETRY_REQUEST_MARKER.data(), HELLO_RETRY_REQUEST_MARKER.size()))
-      return Hello_Retry_Request(buf);
-   else
-      return Server_Hello_13(buf);
+   // server hello that appears to be pre-TLS 1.3, takes precedence over...
+   if(version.is_pre_tls_13())
+      return Server_Hello_12(std::move(data));
+
+   // ... the TLS 1.3 "special case" aka. Hello_Retry_Request
+   if(version == Protocol_Version::TLS_V13)
+      {
+      if(data->is_hello_retry_request)
+         return Hello_Retry_Request(std::move(data));
+
+      return Server_Hello_13(std::move(data));
+      }
+
+   throw TLS_Exception(Alert::PROTOCOL_VERSION,
+                       "unexpected server hello version: " + version.to_string());
    }
 
-Server_Hello_13::Server_Hello_13(const std::vector<uint8_t>& buf,
-                                 const bool is_hello_retry_request)
-   : Server_Hello(buf, is_hello_retry_request)
+Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
+   : Server_Hello(std::move(data))
    {
+   BOTAN_ASSERT_NOMSG(m_data->version() == Protocol_Version::TLS_V13);
+
    // Note: checks that cannot be performed without contextual information
    //       are done in the specific TLS client implementation.
    // Note: The Supported_Version extension makes sure internally that
@@ -430,12 +499,20 @@ Server_Hello_13::Server_Hello_13(const std::vector<uint8_t>& buf,
    const auto& exts = extensions();
 
    // RFC 8446 4.1.3
-   //    All TLS 1.3 ServerHello messages MUST contain
-   //    the "supported_versions" extension.
+   //    All TLS 1.3 ServerHello messages MUST contain the "supported_versions" extension.
    if(!exts.has<Supported_Versions>())
       {
       throw TLS_Exception(Alert::MISSING_EXTENSION,
                           "server hello did not contain 'supported version' extension");
+      }
+
+   // RFC 8446 4.2.1
+   //    A server which negotiates TLS 1.3 MUST respond by sending
+   //    a "supported_versions" extension containing the selected version
+   //    value (0x0304).
+   if(selected_version() != Protocol_Version::TLS_V13)
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "TLS 1.3 Server Hello selected a different version");
       }
 
    // RFC 8446 4.1.3
@@ -463,7 +540,7 @@ Server_Hello_13::Server_Hello_13(const std::vector<uint8_t>& buf,
          // RFC 8446 4.2.2
          //     When sending a HelloRetryRequest, the server MAY provide a "cookie"
          //     extension to the client [...].
-         (is_hello_retry_request && ext != TLSEXT_COOKIE))
+         (m_data->is_hello_retry_request && ext != TLSEXT_COOKIE))
          {
          throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
                              "server hello contained an illegal extension");
@@ -474,7 +551,7 @@ Server_Hello_13::Server_Hello_13(const std::vector<uint8_t>& buf,
 // TODO: this should have a specific implementation for 1.2/1.3
 std::optional<Protocol_Version> Server_Hello_13::random_signals_downgrade() const
    {
-   const uint64_t last8 = load_be<uint64_t>(m_random.data(), 3);
+   const uint64_t last8 = load_be<uint64_t>(m_data->random.data(), 3);
    if(last8 == DOWNGRADE_TLS11)
       { return Protocol_Version::TLS_V11; }
    if(last8 == DOWNGRADE_TLS12)
@@ -485,11 +562,18 @@ std::optional<Protocol_Version> Server_Hello_13::random_signals_downgrade() cons
 
 Protocol_Version Server_Hello_13::selected_version() const
    {
-   const auto versions_ext = m_extensions.get<Supported_Versions>();
+   const auto versions_ext = m_data->extensions.get<Supported_Versions>();
    BOTAN_ASSERT_NOMSG(versions_ext);
    const auto& versions = versions_ext->versions();
    BOTAN_ASSERT_NOMSG(versions.size() == 1);
    return versions.front();
+   }
+
+
+Hello_Retry_Request::Hello_Retry_Request(std::unique_ptr<Server_Hello::Internal> data)
+   : Server_Hello_13(std::move(data))
+   {
+   BOTAN_ASSERT_NOMSG(m_data->is_hello_retry_request);
    }
 
 #endif // BOTAN_HAS_TLS_13

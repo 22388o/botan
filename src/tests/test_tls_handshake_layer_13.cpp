@@ -79,6 +79,12 @@ const auto server_hello_message = Botan::hex_decode(
                                      "1d 00 20 c9 82 88 76 11 20 95 fe 66 76 2b db f7 c6 72 e1 56 d6"
                                      "cc 25 3b 83 3d f1 dd 69 b1 b0 4e 75 1f 0f 00 2b 00 02 03 04");
 
+const auto server_hello_12_message = Botan::hex_decode(
+                                     "02 00 00 3e 03 03 ff ea 0b cf ba 56 4a 4c e1 77 c6 a4 44 b0 eb"
+                                     "df f5 62 9b 27 72 93 c6 18 c1 12 5f 23 1e 86 28 dd 00 c0 30 00"
+                                     "00 16 ff 01 00 01 00 00 0b 00 04 03 00 01 02 00 23 00 00 00 0f"
+                                     "00 01 01");
+
 const auto encrypted_extensions = Botan::hex_decode(
                                      "08 00 00 24 00 22 00 0a 00 14 00"
                                      "12 00 1d 00 17 00 18 00 19 01 00 01 01 01 02 01 03 01 04 00 1c"
@@ -206,6 +212,15 @@ std::vector<Test::Result> read_handshake_messages()
          Transcript_Hash_State th("SHA-256");
          hl.copy_data(server_hello_message);
          result.confirm("is a server hello", has_message<Server_Hello_13>(result, hl.next_message(Policy(), th)));
+         check_transcript_hash_filled(result, th);
+         }),
+
+      CHECK("read legacy server hello", [&](auto& result)
+         {
+         Handshake_Layer hl(Connection_Side::CLIENT);
+         Transcript_Hash_State th("SHA-256");
+         hl.copy_data(server_hello_12_message);
+         result.confirm("is a legacy server hello", has_message<Server_Hello_12>(result, hl.next_message(Policy(), th)));
          check_transcript_hash_filled(result, th);
          }),
 

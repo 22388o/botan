@@ -34,6 +34,7 @@ namespace Botan::TLS {
 
 Channel_Impl_13::Channel_Impl_13(Callbacks& callbacks,
                                  Session_Manager& session_manager,
+                                 Credentials_Manager& credentials_manager,
                                  RandomNumberGenerator& rng,
                                  const Policy& policy,
                                  bool is_server,
@@ -41,6 +42,7 @@ Channel_Impl_13::Channel_Impl_13(Callbacks& callbacks,
    m_side(is_server ? Connection_Side::SERVER : Connection_Side::CLIENT),
    m_callbacks(callbacks),
    m_session_manager(session_manager),
+   m_credentials_manager(credentials_manager),
    m_rng(rng),
    m_policy(policy),
    m_record_layer(m_side),
@@ -54,6 +56,8 @@ Channel_Impl_13::~Channel_Impl_13() = default;
 
 size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
    {
+   BOTAN_STATE_CHECK(!is_downgrading());
+
    // RFC 8446 6.1
    //    Any data received after a closure alert has been received MUST be ignored.
    if(!m_can_read)
@@ -61,6 +65,9 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
 
    try
       {
+      if(expects_downgrade())
+         preserve_peer_transcript(input, input_size);
+
       m_record_layer.copy_data(std::vector(input, input+input_size));
 
       while(true)
@@ -91,11 +98,34 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
                //    ClientHello, EndOfEarlyData, ServerHello, Finished, and KeyUpdate
                //    messages can immediately precede a key change, implementations
                //    MUST send these messages in alignment with a record boundary.
-               if(holds_any_of<Client_Hello_13/*, EndOfEarlyData,*/, Server_Hello_13, Finished_13/*, KeyUpdate*/>(handshake_msg.value())
+               //
+               // Note: Hello_Retry_Request was added to the list below although it cannot immediately precede a key change.
+               //       However, there cannot be any further sensible messages in the record after HRR.
+               //
+               // Note: Server_Hello_12 was deliberately not included in the check below because in TLS 1.2 Server Hello and
+               //       other handshake messages can be legally coalesced in a single record.
+               //
+               if(holds_any_of<Client_Hello_13/*, EndOfEarlyData,*/, Server_Hello_13, Hello_Retry_Request, Finished_13/*, KeyUpdate*/>
+                     (handshake_msg.value())
                      && m_handshake_layer.has_pending_data())
-                  { throw Unexpected_Message("Handshake messages must not span key changes"); }
+                  { throw Unexpected_Message("Unexpected additional handshake message data found in record"); }
+
+               const bool downgrade_requested = std::holds_alternative<Server_Hello_12>(handshake_msg.value());
 
                process_handshake_msg(std::move(handshake_msg.value()));
+
+               if(downgrade_requested)
+                  {
+                  // Downgrade to TLS 1.2 was detected. Stop everything we do and await being replaced by a 1.2 implementation.
+                  BOTAN_STATE_CHECK(m_downgrade_info);
+                  m_downgrade_info->will_downgrade = true;
+                  return 0;
+                  }
+               else
+                  {
+                  // Downgrade can only happen if the first received message is a Server_Hello_12. This was not the case.
+                  m_downgrade_info.reset();
+                  }
                }
             }
          else if(record.type == CHANGE_CIPHER_SPEC)
@@ -150,7 +180,12 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
 
 void Channel_Impl_13::send_handshake_message(const Handshake_Message_13_Ref message)
    {
-   send_record(Record_Type::HANDSHAKE, m_handshake_layer.prepare_message(message, m_transcript_hash));
+   auto msg = m_handshake_layer.prepare_message(message, m_transcript_hash);
+
+   if(expects_downgrade() && std::holds_alternative<std::reference_wrapper<Client_Hello_13>>(message))
+      preserve_client_hello(msg);
+
+   send_record(Record_Type::HANDSHAKE, std::move(msg));
    }
 
 void Channel_Impl_13::send_dummy_change_cipher_spec()
@@ -209,12 +244,14 @@ SymmetricKey Channel_Impl_13::key_material_export(const std::string& label,
       const std::string& context,
       size_t length) const
    {
+   BOTAN_STATE_CHECK(!is_downgrading());
    BOTAN_STATE_CHECK(m_cipher_state != nullptr && m_cipher_state->can_export_keys());
    return m_cipher_state->export_key(label, context, length);
    }
 
 void Channel_Impl_13::send_record(uint8_t record_type, const std::vector<uint8_t>& record)
    {
+   BOTAN_STATE_CHECK(!is_downgrading());
    BOTAN_STATE_CHECK(m_can_write);
    const auto to_write = m_record_layer.prepare_records(static_cast<Record_Type>(record_type),
                          record, m_cipher_state.get());
@@ -245,6 +282,23 @@ void Channel_Impl_13::shutdown()
    m_can_read = false;
    m_can_write = false;
    m_cipher_state.reset();
+   }
+
+void Channel_Impl_13::expect_downgrade(const Server_Information& server_info)
+   {
+   Downgrade_Information di
+      {
+      {},
+      {},
+      server_info,
+      callbacks(),
+      session_manager(),
+      credentials_manager(),
+      rng(),
+      policy(),
+      false // will_downgrade
+      };
+   m_downgrade_info = std::make_unique<Downgrade_Information>(std::move(di));
    }
 
 }

@@ -544,6 +544,21 @@ Client_Hello_13::Client_Hello_13(const Policy& policy,
       m_extensions.add(new Record_Size_Limit(policy.record_size_limit().value()));
       }
 
+   if(policy.allow_tls12())
+      {
+      if(policy.negotiate_encrypt_then_mac())
+         { m_extensions.add(new Encrypt_then_MAC); }
+
+      if(m_extensions.has<Supported_Groups>() && !m_extensions.get<Supported_Groups>()->ec_groups().empty())
+         {
+         m_extensions.add(new Supported_Point_Formats(policy.use_ecc_point_compression()));
+         }
+
+      // TODO: we might need a better way for that
+      const auto legacy_suites = policy.ciphersuite_list(Protocol_Version::TLS_V12);
+      m_suites.insert(m_suites.end(), legacy_suites.cbegin(), legacy_suites.cend());
+      }
+
    cb.tls_modify_extensions(m_extensions, CLIENT);
    }
 

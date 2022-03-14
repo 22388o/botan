@@ -440,6 +440,73 @@ class TLS_Extension_Parsing_Test final : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("tls_extensions", "tls_extensions_parsing",                TLS_Extension_Parsing_Test);
 BOTAN_REGISTER_TEST("tls_extensions", "tls_extensions_key_share_client_hello", TLS_Key_Share_CH_Generation_Test);
+
+class TLS_13_Message_Parsing_Test final : public Text_Based_Test
+   {
+   public:
+      TLS_13_Message_Parsing_Test()
+         : Text_Based_Test("tls_13", "Buffer,Exception",
+            "Protocol,Message_Type,AdditionalData,Ciphersuite,Name") {}
+
+      Test::Result run_one_test(const std::string& algo, const VarMap& vars) override
+         {
+         const std::vector<uint8_t> buffer      = vars.get_req_bin("Buffer");
+         const std::vector<uint8_t> protocol    = vars.get_opt_bin("Protocol");
+         const std::string msg_type             = vars.get_opt_str("Message_Type", "");
+         const std::vector<uint8_t> ciphersuite = vars.get_opt_bin("Ciphersuite");
+         const std::string exception            = vars.get_req_str("Exception");
+         const bool is_positive_test            = exception.empty();
+
+         Test::Result result("TLS 1.3 " + algo + " parsing");
+
+         if(algo == "server_hello")
+            {
+            const std::string extensions = vars.get_req_str("AdditionalData");
+            const Botan::TLS::Ciphersuite cs = Botan::TLS::Ciphersuite::by_id(Botan::make_uint16(ciphersuite[0], ciphersuite[1])).value();
+            const Botan::TLS::Protocol_Version pv(protocol[0], protocol[1]);
+
+            try
+               {
+               std::visit([&](auto msg) {
+                  if constexpr(std::is_same_v<Botan::TLS::Server_Hello_12, decltype(msg)>)
+                     {
+                     result.confirm("expected Server_Hello_12", msg_type == "server_hello_12");
+                     result.confirm("expected pre TLS 1.3 message", pv == msg.legacy_version());
+                     }
+                  else if constexpr(std::is_same_v<Botan::TLS::Server_Hello_13, decltype(msg)>)
+                     {
+                     result.confirm("expected Server_Hello_13", msg_type == "server_hello_13");
+                     }
+                  else if constexpr(std::is_same_v<Botan::TLS::Hello_Retry_Request, decltype(msg)>)
+                     {
+                     result.confirm("expected Hello_Retry_Request", msg_type == "hello_retry_request");
+                     }
+
+                  result.confirm("Ciphersuite", (msg.ciphersuite() == cs.ciphersuite_code()));
+
+                  std::vector<uint8_t> buf;
+                  for(Botan::TLS::Handshake_Extension_Type const& type : msg.extensions().extension_types())
+                     {
+                     uint16_t u16type = static_cast<uint16_t>(type);
+                     buf.push_back(Botan::get_byte<0>(u16type));
+                     buf.push_back(Botan::get_byte<1>(u16type));
+                     }
+                  result.test_eq("Hello extensions", Botan::hex_encode(buf), extensions);
+                  }, Botan::TLS::Server_Hello_13::parse(buffer));
+               }
+            catch(const std::exception &ex)
+               {
+               result.test_eq("correct error produced", ex.what(), exception);
+               result.require("negative test", !is_positive_test);
+               }
+            }
+
+         return result;
+         }
+   };
+
+BOTAN_REGISTER_TEST("tls", "tls_13_messages", TLS_13_Message_Parsing_Test);
+
 #endif
 
 #endif
