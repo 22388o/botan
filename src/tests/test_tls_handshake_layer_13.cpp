@@ -261,7 +261,7 @@ std::vector<Test::Result> read_handshake_messages()
             Transcript_Hash_State th("SHA-256");
 
             hl.copy_data(msg);
-            result.template test_throws<TLS_Exception>("message is rejected", "unexpected handshake message received",
+            result.template test_throws<TLS_Exception>("message is rejected", "Unknown handshake message received",
                   [&] { hl.next_message(Policy(), th); });
 
             check_transcript_hash_empty(result, th);

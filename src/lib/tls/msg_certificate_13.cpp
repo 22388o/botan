@@ -94,10 +94,13 @@ Certificate_13::Certificate_13(const std::vector<uint8_t>& buf,
          throw TLS_Exception(Alert::BAD_CERTIFICATE, "The leaf certificate must be v3");
          }
 
-      const auto exts_buf = reader.get_tls_length_value(2);
-      // TODO: this is a lot of copying
+      // Extensions are simply tacked at the end of the certificate entry. This
+      // is a departure from the typical "tag-length-value" in a sense that the
+      // Extensions deserializer needs the length value of the extensions.
+      const auto extensions_length = reader.peek_uint16_t();
+      const auto exts_buf = reader.get_fixed<uint8_t>(extensions_length + 2);
       TLS_Data_Reader exts_reader("extensions reader", exts_buf);
-      entry.extensions.deserialize(exts_reader, m_side);
+      entry.extensions.deserialize(exts_reader, m_side, type());
 
       m_entries.push_back(std::move(entry));
       }

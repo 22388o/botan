@@ -81,6 +81,12 @@ class TLS_Data_Reader final
          return result;
          }
 
+      uint16_t peek_uint16_t() const
+         {
+         assert_at_least(2);
+         return make_uint16(m_buf[m_offset], m_buf[m_offset+1]);
+         }
+
       uint8_t get_byte()
          {
          assert_at_least(1);

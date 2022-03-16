@@ -83,7 +83,7 @@ Handshake_Message_13 Handshake_Layer::parse_message(
       //    return Key_Update(msg);
 
       default:
-         throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "unexpected handshake message received");
+         throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "Unknown handshake message received");
       }
    }
 

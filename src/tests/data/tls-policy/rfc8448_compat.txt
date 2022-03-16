@@ -23,3 +23,4 @@ minimum_rsa_bits = 1024
 minimum_signature_strength = 110
 record_size_limit = 16385
 tls_13_middlebox_compatibility_mode = true
+support_cert_status_message = false

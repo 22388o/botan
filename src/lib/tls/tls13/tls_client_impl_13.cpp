@@ -60,7 +60,7 @@ void Client_Impl_13::process_handshake_msg(Handshake_Message_13 message)
 
 std::vector<Handshake_Type> Client_Impl_13::expected_post_handshake_messages() const
    {
-   BOTAN_STATE_CHECK(is_active());
+   BOTAN_STATE_CHECK(!is_closed());
    // TODO: This list may contain CERTIFICATE_REQUEST iff the client hello advertised
    //       support for post-handshake authentication via the post_handshake_auth
    //       extension. (RFC 8446 4.6.2)
@@ -349,9 +349,9 @@ void Client_Impl_13::handle(const Finished_13& finished_msg)
 
    // TODO: save session and invoke tls_session_established callback
 
-   callbacks().tls_session_activated();
-
    m_transitions.set_expected_next(expected_post_handshake_messages());
+
+   callbacks().tls_session_activated();
    }
 
 void TLS::Client_Impl_13::handle(const New_Session_Ticket_13&)

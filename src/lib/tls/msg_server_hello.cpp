@@ -86,7 +86,10 @@ Server_Hello::Internal::Internal(const std::vector<uint8_t>& buf)
    // Extension parsing will however not be affected by the associated flag.
    // Only after parsing the extensions will the upstream code be able to decide
    // whether we're dealing with TLS 1.3 or older.
-   extensions.deserialize(reader, Connection_Side::SERVER, is_hello_retry_request);
+   extensions.deserialize(reader, Connection_Side::SERVER,
+                          is_hello_retry_request
+                              ? Handshake_Type::HELLO_RETRY_REQUEST
+                              : Handshake_Type::SERVER_HELLO);
    }
 
 

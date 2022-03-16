@@ -408,6 +408,11 @@ class BOTAN_UNSTABLE_API Certificate_Status_Request final : public Extension
          return m_extension_bytes;
          }
 
+      const std::vector<uint8_t>& get_ocsp_response() const
+         {
+         return m_response;
+         }
+
       // Server generated version: empty
       Certificate_Status_Request() {}
 
@@ -417,11 +422,13 @@ class BOTAN_UNSTABLE_API Certificate_Status_Request final : public Extension
 
       Certificate_Status_Request(TLS_Data_Reader& reader,
                                  uint16_t extension_size,
-                                 Connection_Side side);
+                                 Connection_Side side,
+                                 Handshake_Type message_type);
    private:
       std::vector<uint8_t> m_ocsp_names;
       std::vector<std::vector<uint8_t>> m_ocsp_keys; // is this field really needed
       std::vector<uint8_t> m_extension_bytes;
+      std::vector<uint8_t> m_response;
    };
 
 /**
@@ -625,7 +632,7 @@ class BOTAN_UNSTABLE_API Key_Share final : public Extension
       explicit Key_Share(TLS_Data_Reader& reader,
                          uint16_t extension_size,
                          Connection_Side from,
-                         bool is_hello_retry_request);
+                         Handshake_Type message_type);
 
       // constuctor used for ClientHello msg
       explicit Key_Share(const Policy& policy, Callbacks& cb, RandomNumberGenerator& rng);
@@ -714,8 +721,8 @@ class BOTAN_UNSTABLE_API Extensions final
       std::vector<uint8_t> serialize(Connection_Side whoami) const;
 
       void deserialize(TLS_Data_Reader& reader,
-                       Connection_Side from,
-                       bool is_hello_retry_request = false);
+                       const Connection_Side from,
+                       const Handshake_Type message_type);
 
       /**
        * Take the extension with the given type out of the extensions list.
@@ -758,9 +765,9 @@ class BOTAN_UNSTABLE_API Extensions final
       Extensions(Extensions&&) = default;
       Extensions& operator=(Extensions&&) = default;
 
-      Extensions(TLS_Data_Reader& reader, Connection_Side side)
+      Extensions(TLS_Data_Reader& reader, Connection_Side side, Handshake_Type message_type)
          {
-         deserialize(reader, side);
+         deserialize(reader, side, message_type);
          }
 
    private:

@@ -150,7 +150,7 @@ Client_Hello::Client_Hello(const std::vector<uint8_t>& buf)
 
    m_comp_methods = reader.get_range_vector<uint8_t>(1, 1, 255);
 
-   m_extensions.deserialize(reader, Connection_Side::CLIENT);
+   m_extensions.deserialize(reader, Connection_Side::CLIENT, type());
 
    if(offered_suite(static_cast<uint16_t>(TLS_EMPTY_RENEGOTIATION_INFO_SCSV)))
       {
@@ -539,13 +539,21 @@ Client_Hello_13::Client_Hello_13(const Policy& policy,
    // TODO: this is currently hard-coded to PSK_DHE_KE (to please RFC 8448)
    m_extensions.add(new PSK_Key_Exchange_Modes({PSK_Key_Exchange_Mode::PSK_DHE_KE}));
 
+   // TODO: actually check the OCSP information provided in the Certificate_Status_Request
+   //       extensions in the Certificate handshake message
+   if(policy.support_cert_status_message())
+      m_extensions.add(new Certificate_Status_Request({}, {}));
+
    if(policy.record_size_limit().has_value())
       {
       m_extensions.add(new Record_Size_Limit(policy.record_size_limit().value()));
       }
 
+   // TODO: This is work in progress and currently just a "best guess"
    if(policy.allow_tls12())
       {
+      m_extensions.add(new Session_Ticket());
+
       if(policy.negotiate_encrypt_then_mac())
          { m_extensions.add(new Encrypt_then_MAC); }
 

@@ -15,10 +15,11 @@
 namespace Botan::TLS {
 
 Encrypted_Extensions::Encrypted_Extensions(const std::vector<uint8_t>& buf)
-{
-TLS_Data_Reader reader("encrypted extensions reader", buf);
-m_extensions.deserialize(reader, Connection_Side::SERVER);
-}
+   {
+   TLS_Data_Reader reader("encrypted extensions reader", buf);
+
+   m_extensions.deserialize(reader, Connection_Side::SERVER, type());
+   }
 
 }
 

@@ -256,7 +256,7 @@ std::vector<Test::Result> basic_sanitization_parse_records(TLS::Connection_Side 
          {
          std::vector<uint8_t> huge_record{'\x17', '\x03', '\x03', '\x41', '\x01'};
          huge_record.resize(TLS::MAX_CIPHERTEXT_SIZE_TLS13 + TLS::TLS_HEADER_SIZE + 1);
-         result.test_throws("record too big", "overflowing record received", [&]
+         result.test_throws("record too big", "Received an encrypted record that exceeds maximum size", [&]
             {
             parse_records(huge_record);
             });
@@ -266,7 +266,7 @@ std::vector<Test::Result> basic_sanitization_parse_records(TLS::Connection_Side 
          {
          std::vector<uint8_t> huge_record{'\x16', '\x03', '\x03', '\x40', '\x01'};
          huge_record.resize(TLS::MAX_PLAINTEXT_SIZE + TLS::TLS_HEADER_SIZE + 1);
-         result.test_throws("record too big", "overflowing record received", [&]
+         result.test_throws("record too big", "Received a record that exceeds maximum size", [&]
             {
             parse_records(huge_record);
             });
@@ -275,7 +275,7 @@ std::vector<Test::Result> basic_sanitization_parse_records(TLS::Connection_Side 
       CHECK("invalid record type", [&](auto& result)
          {
          std::vector<uint8_t> invalid_record_type{'\x42', '\x03', '\x03', '\x41', '\x01'};
-         result.test_throws("invalid record type", "unexpected message received", [&]
+         result.test_throws("invalid record type", "TLS record type had unexpected value", [&]
             {
             parse_records(invalid_record_type);
             });
@@ -284,7 +284,7 @@ std::vector<Test::Result> basic_sanitization_parse_records(TLS::Connection_Side 
       CHECK("invalid record version", [&](auto& result)
          {
          std::vector<uint8_t> invalid_record_version{'\x17', '\x03', '\x02', '\x00', '\x01', '\x42'};
-         result.test_throws("invalid record version", "invalid record version", [&]
+         result.test_throws("invalid record version", "Received unexpected record version", [&]
             {
             parse_records(invalid_record_version);
             });

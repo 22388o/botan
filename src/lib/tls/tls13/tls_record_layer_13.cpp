@@ -42,7 +42,7 @@ Record_Type read_record_type(const uint8_t type_byte)
          && type_byte != Record_Type::ALERT
          && type_byte != Record_Type::CHANGE_CIPHER_SPEC)
       {
-      throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "unexpected message received");
+      throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "TLS record type had unexpected value");
       }
 
    return static_cast<Record_Type>(type_byte);
@@ -66,7 +66,7 @@ struct TLSPlaintext_Header
       //    it MAY also be 0x0301 for compatibility purposes.
       if(legacy_version.version_code() != 0x0303 &&
             !(initial_record && legacy_version.version_code() == 0x0301))
-         { throw TLS_Exception(Alert::PROTOCOL_VERSION, "invalid record version"); }
+         { throw TLS_Exception(Alert::PROTOCOL_VERSION, "Received unexpected record version"); }
 
       // RFC 8446 5.1
       //    Implementations MUST NOT send zero-length fragments of Handshake
@@ -84,7 +84,7 @@ struct TLSPlaintext_Header
          //    padding, plus one for the inner content type, plus any expansion
          //    added by the AEAD algorithm. The length MUST NOT exceed 2^14 + 256 bytes.
          if(fragment_length > MAX_CIPHERTEXT_SIZE_TLS13)
-            { throw TLS_Exception(Alert::RECORD_OVERFLOW, "overflowing record received"); }
+            { throw TLS_Exception(Alert::RECORD_OVERFLOW, "Received an encrypted record that exceeds maximum size"); }
          }
       else
          {
@@ -92,7 +92,7 @@ struct TLSPlaintext_Header
          //    The length MUST NOT exceed 2^14 bytes.  An endpoint that receives a record that
          //    exceeds this length MUST terminate the connection with a "record_overflow" alert.
          if(fragment_length > MAX_PLAINTEXT_SIZE)
-            { throw TLS_Exception(Alert::RECORD_OVERFLOW, "overflowing record received"); }
+            { throw TLS_Exception(Alert::RECORD_OVERFLOW, "Received a record that exceeds maximum size"); }
          }
       }
 

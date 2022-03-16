@@ -19,15 +19,11 @@ namespace Botan::TLS {
 namespace {
 
 std::unique_ptr<Extension> make_extension(TLS_Data_Reader& reader,
-                                          uint16_t code,
-                                          uint16_t size,
-                                          Connection_Side from,
-                                          bool is_hello_retry_request)
+                                          const uint16_t code,
+                                          const uint16_t size,
+                                          const Connection_Side from,
+                                          const Handshake_Type message_type)
    {
-#if !defined (BOTAN_HAS_TLS_13)
-   BOTAN_UNUSED(is_hello_retry_request);
-#endif
-
    switch(code)
       {
       case TLSEXT_SERVER_NAME_INDICATION:
@@ -37,7 +33,7 @@ std::unique_ptr<Extension> make_extension(TLS_Data_Reader& reader,
          return std::make_unique<Supported_Groups>(reader, size);
 
       case TLSEXT_CERT_STATUS_REQUEST:
-         return std::make_unique<Certificate_Status_Request>(reader, size, from);
+         return std::make_unique<Certificate_Status_Request>(reader, size, from, message_type);
 
       case TLSEXT_EC_POINT_FORMATS:
          return std::make_unique<Supported_Point_Formats>(reader, size);
@@ -80,7 +76,7 @@ std::unique_ptr<Extension> make_extension(TLS_Data_Reader& reader,
          return std::make_unique<Signature_Algorithms_Cert>(reader, size);
 
       case TLSEXT_KEY_SHARE:
-         return std::make_unique<Key_Share>(reader, size, from, is_hello_retry_request);
+         return std::make_unique<Key_Share>(reader, size, from, message_type);
 #endif
       }
 
@@ -89,7 +85,6 @@ std::unique_ptr<Extension> make_extension(TLS_Data_Reader& reader,
    }
 
 }
-
 
 void Extensions::add(std::unique_ptr<Extension> extn)
    {
@@ -101,7 +96,9 @@ void Extensions::add(std::unique_ptr<Extension> extn)
    m_extensions.emplace_back(extn.release());
    }
 
-void Extensions::deserialize(TLS_Data_Reader& reader, Connection_Side from, bool is_hello_retry_request)
+void Extensions::deserialize(TLS_Data_Reader& reader,
+                             const Connection_Side from,
+                             const Handshake_Type message_type)
    {
    if(reader.has_remaining())
       {
@@ -121,7 +118,7 @@ void Extensions::deserialize(TLS_Data_Reader& reader, Connection_Side from, bool
             throw TLS_Exception(TLS::Alert::DECODE_ERROR,
                                 "Peer sent duplicated extensions");
 
-         this->add(make_extension(reader, extension_code, extension_size, from, is_hello_retry_request));
+         this->add(make_extension(reader, extension_code, extension_size, from, message_type));
          }
       }
    }
@@ -536,65 +533,6 @@ Encrypt_then_MAC::Encrypt_then_MAC(TLS_Data_Reader& /*unused*/,
 std::vector<uint8_t> Encrypt_then_MAC::serialize(Connection_Side /*whoami*/) const
    {
    return std::vector<uint8_t>();
-   }
-
-std::vector<uint8_t> Certificate_Status_Request::serialize(Connection_Side whoami) const
-   {
-   std::vector<uint8_t> buf;
-
-   if(whoami == Connection_Side::SERVER)
-      return buf; // server reply is empty
-
-   /*
-   opaque ResponderID<1..2^16-1>;
-   opaque Extensions<0..2^16-1>;
-
-   CertificateStatusType status_type = ocsp(1)
-   ResponderID responder_id_list<0..2^16-1>
-   Extensions  request_extensions;
-   */
-
-   buf.push_back(1); // CertificateStatusType ocsp
-
-   buf.push_back(0);
-   buf.push_back(0);
-   buf.push_back(0);
-   buf.push_back(0);
-
-   return buf;
-   }
-
-Certificate_Status_Request::Certificate_Status_Request(TLS_Data_Reader& reader,
-                                                       uint16_t extension_size,
-                                                       Connection_Side from)
-   {
-   if(from == Connection_Side::SERVER)
-      {
-      if(extension_size != 0)
-         throw Decoding_Error("Server sent non-empty Certificate_Status_Request extension");
-      }
-   else if(extension_size > 0)
-      {
-      const uint8_t type = reader.get_byte();
-      if(type == 1)
-         {
-         const size_t len_resp_id_list = reader.get_uint16_t();
-         m_ocsp_names = reader.get_fixed<uint8_t>(len_resp_id_list);
-         const size_t len_requ_ext = reader.get_uint16_t();
-         m_extension_bytes = reader.get_fixed<uint8_t>(len_requ_ext);
-         }
-      else
-         {
-         reader.discard_next(extension_size - 1);
-         }
-      }
-   }
-
-Certificate_Status_Request::Certificate_Status_Request(const std::vector<uint8_t>& ocsp_responder_ids,
-                                                       const std::vector<std::vector<uint8_t>>& ocsp_key_ids) :
-   m_ocsp_names(ocsp_responder_ids),
-   m_ocsp_keys(ocsp_key_ids)
-   {
    }
 
 std::vector<uint8_t> Supported_Versions::serialize(Connection_Side whoami) const

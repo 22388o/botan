@@ -57,7 +57,7 @@ void shim_log(const std::string& s)
       static FILE* log = std::fopen("/tmp/bogo_shim.log", "w");
       struct timeval tv;
       ::gettimeofday(&tv, nullptr);
-      std::fprintf(log, "%lld.%lu: %s\n", static_cast<unsigned long long>(tv.tv_sec), tv.tv_usec, s.c_str());
+      std::fprintf(log, "%lld.%lu: %s\n", static_cast<unsigned long long>(tv.tv_sec), static_cast<unsigned long>(tv.tv_usec), s.c_str());
       std::fflush(log);
       }
    }
@@ -1043,7 +1043,7 @@ class Shim_Policy final : public Botan::TLS::Policy
       size_t m_sessions;
    };
 
-std::vector<uint16_t> Shim_Policy::ciphersuite_list(Botan::TLS::Protocol_Version) const
+std::vector<uint16_t> Shim_Policy::ciphersuite_list(Botan::TLS::Protocol_Version version) const
    {
    std::vector<uint16_t> ciphersuite_codes;
 
@@ -1074,10 +1074,11 @@ std::vector<uint16_t> Shim_Policy::ciphersuite_list(Botan::TLS::Protocol_Version
       for(auto i = ciphersuites.rbegin(); i != ciphersuites.rend(); ++i)
          {
          const auto suite = *i;
+         const bool is_tls13_suite =
+            suite.kex_method() == Botan::TLS::Kex_Algo::UNDEFINED &&
+            suite.auth_method() == Botan::TLS::Auth_Method::UNDEFINED;
 
-         //TODO: Dummy way of skipping TLS 1.3 cipher suites
-         if(suite.kex_method() == Botan::TLS::Kex_Algo::UNDEFINED &&
-            suite.auth_method() == Botan::TLS::Auth_Method::UNDEFINED)
+         if((version == Botan::TLS::Protocol_Version::TLS_V13) != is_tls13_suite)
             continue;
 
          // Can we use it?

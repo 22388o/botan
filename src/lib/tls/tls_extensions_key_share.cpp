@@ -421,16 +421,16 @@ class Key_Share_HelloRetryRequest final : public Key_Share_Content
 Key_Share::Key_Share(TLS_Data_Reader& reader,
                      uint16_t extension_size,
                      Connection_Side from,
-                     bool is_hello_retry_request)
+                     Handshake_Type message_type)
    {
-   BOTAN_ASSERT_IMPLICATION(is_hello_retry_request, from == SERVER,
+   BOTAN_ASSERT_IMPLICATION(message_type == HELLO_RETRY_REQUEST, from == SERVER,
                             "only server hello can represent a hello retry request");
 
    if(from == Connection_Side::CLIENT)
       {
       m_content = std::make_unique<Key_Share_ClientHello>(reader, extension_size);
       }
-   else if(is_hello_retry_request)  // Connection_Side::SERVER
+   else if(message_type == HELLO_RETRY_REQUEST)  // Connection_Side::SERVER
       {
       m_content = std::make_unique<Key_Share_HelloRetryRequest>(reader, extension_size);
       }
