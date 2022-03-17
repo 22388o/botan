@@ -49,7 +49,13 @@ class BOTAN_TEST_API Transcript_Hash_State
       Transcript_Hash_State(Transcript_Hash_State&&) = default;
       Transcript_Hash_State& operator=(Transcript_Hash_State&&) = default;
 
-      void update(const std::vector<uint8_t>& serialized_message);
+      void update(const std::vector<uint8_t>& serialized_message)
+         {
+         update(serialized_message.data(), serialized_message.size());
+         }
+
+      // TODO: C++20 replace this C-style API with std::span
+      void update(const uint8_t* serialized_message, const size_t serialized_message_length);
 
       /**
        * returns the latest transcript hash

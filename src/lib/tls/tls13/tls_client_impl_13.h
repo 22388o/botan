@@ -72,6 +72,7 @@ class Client_Impl_13 : public Channel_Impl_13
 
    private:
       void process_handshake_msg(Handshake_Message_13 msg) override;
+      void process_post_handshake_msg(Post_Handshake_Message_13 msg) override;
 
       void handle(const Server_Hello_12& server_hello_msg);
       void handle(const Server_Hello_13& server_hello_msg);
@@ -81,6 +82,7 @@ class Client_Impl_13 : public Channel_Impl_13
       void handle(const Certificate_Verify_13& certificate_verify_msg);
       void handle(const Finished_13& finished_msg);
       void handle(const New_Session_Ticket_13& new_session_ticket);
+      void handle(const Key_Update& key_update);
 
       std::vector<Handshake_Type> expected_post_handshake_messages() const;
 

@@ -869,6 +869,22 @@ class BOTAN_UNSTABLE_API Change_Cipher_Spec final : public Handshake_Message
          { return std::vector<uint8_t>(1, 1); }
    };
 
+class BOTAN_UNSTABLE_API Key_Update final : public Handshake_Message
+   {
+   public:
+      Handshake_Type type() const override { return  KEY_UPDATE; }
+
+      explicit Key_Update(const bool request_peer_update);
+      explicit Key_Update(const std::vector<uint8_t>& buf);
+
+      std::vector<uint8_t> serialize() const override;
+
+      bool expects_reciprocation() const { return m_update_requested; }
+
+   private:
+      bool m_update_requested;
+   };
+
 #if defined(BOTAN_HAS_TLS_13)
 
 namespace {
@@ -898,14 +914,12 @@ using Handshake_Message_13 = std::variant<
                              Certificate_13,
                              // Certificate_Req_13,
                              Certificate_Verify_13,
-                             Finished_13,
-
-                             // Post-Handshake Messages
-                             New_Session_Ticket_13
-                             // Key_Update,
-                             >;
-
+                             Finished_13>;
 using Handshake_Message_13_Ref = as_wrapped_references_t<Handshake_Message_13>;
+
+using Post_Handshake_Message_13 = std::variant<
+                                  New_Session_Ticket_13,
+                                  Key_Update>;
 
 using Server_Handshake_13_Message = std::variant<
                                     Server_Hello_13,
@@ -914,13 +928,17 @@ using Server_Handshake_13_Message = std::variant<
                                     Encrypted_Extensions,
                                     Certificate_13,
                                     Certificate_Verify_13,
-                                    Finished_13,
-                                    New_Session_Ticket_13>;
+                                    Finished_13>;
+                                    // Post-Handshake Messages
+                                    // New_Session_Ticket_13,
+                                    // Key_Update>;
 using Server_Handshake_13_Message_Ref = as_wrapped_references_t<Server_Handshake_13_Message>;
 
 using Client_Handshake_13_Message = std::variant<
                                     Client_Hello_13,
                                     Finished_13>;
+                                    // Post-Handshake Messages
+                                    // Key_Update>;
 using Client_Handshake_13_Message_Ref = as_wrapped_references_t<Client_Handshake_13_Message>;
 
 #endif // BOTAN_HAS_TLS_13

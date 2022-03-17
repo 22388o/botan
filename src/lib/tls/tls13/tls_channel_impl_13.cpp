@@ -88,43 +88,58 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
             {
             m_handshake_layer.copy_data(unlock(record.fragment));  // TODO: record fragment should be an ordinary std::vector
 
-            while(auto handshake_msg = m_handshake_layer.next_message(policy(), m_transcript_hash))
+            const bool post_handshake = is_active();
+            if (!post_handshake)
                {
-               // RFC 8446 5.1
-               //    Handshake messages MUST NOT span key changes.  Implementations
-               //    MUST verify that all messages immediately preceding a key change
-               //    align with a record boundary; if not, then they MUST terminate the
-               //    connection with an "unexpected_message" alert.  Because the
-               //    ClientHello, EndOfEarlyData, ServerHello, Finished, and KeyUpdate
-               //    messages can immediately precede a key change, implementations
-               //    MUST send these messages in alignment with a record boundary.
-               //
-               // Note: Hello_Retry_Request was added to the list below although it cannot immediately precede a key change.
-               //       However, there cannot be any further sensible messages in the record after HRR.
-               //
-               // Note: Server_Hello_12 was deliberately not included in the check below because in TLS 1.2 Server Hello and
-               //       other handshake messages can be legally coalesced in a single record.
-               //
-               if(holds_any_of<Client_Hello_13/*, EndOfEarlyData,*/, Server_Hello_13, Hello_Retry_Request, Finished_13/*, KeyUpdate*/>
-                     (handshake_msg.value())
-                     && m_handshake_layer.has_pending_data())
-                  { throw Unexpected_Message("Unexpected additional handshake message data found in record"); }
-
-               const bool downgrade_requested = std::holds_alternative<Server_Hello_12>(handshake_msg.value());
-
-               process_handshake_msg(std::move(handshake_msg.value()));
-
-               if(downgrade_requested)
+               while(auto handshake_msg = m_handshake_layer.next_message(policy(), m_transcript_hash))
                   {
-                  // Downgrade to TLS 1.2 was detected. Stop everything we do and await being replaced by a 1.2 implementation.
-                  BOTAN_STATE_CHECK(m_downgrade_info);
-                  m_downgrade_info->will_downgrade = true;
-                  return 0;
+                  // RFC 8446 5.1
+                  //    Handshake messages MUST NOT span key changes.  Implementations
+                  //    MUST verify that all messages immediately preceding a key change
+                  //    align with a record boundary; if not, then they MUST terminate the
+                  //    connection with an "unexpected_message" alert.  Because the
+                  //    ClientHello, EndOfEarlyData, ServerHello, Finished, and KeyUpdate
+                  //    messages can immediately precede a key change, implementations
+                  //    MUST send these messages in alignment with a record boundary.
+                  //
+                  // Note: Hello_Retry_Request was added to the list below although it cannot immediately precede a key change.
+                  //       However, there cannot be any further sensible messages in the record after HRR.
+                  //
+                  // Note: Server_Hello_12 was deliberately not included in the check below because in TLS 1.2 Server Hello and
+                  //       other handshake messages can be legally coalesced in a single record.
+                  //
+                  if(holds_any_of<Client_Hello_13/*, EndOfEarlyData,*/, Server_Hello_13, Hello_Retry_Request, Finished_13>
+                        (handshake_msg.value())
+                        && m_handshake_layer.has_pending_data())
+                     { throw Unexpected_Message("Unexpected additional handshake message data found in record"); }
+
+                  const bool downgrade_requested = std::holds_alternative<Server_Hello_12>(handshake_msg.value());
+
+                  process_handshake_msg(std::move(handshake_msg.value()));
+
+                  if(downgrade_requested)
+                     {
+                     // Downgrade to TLS 1.2 was detected. Stop everything we do and await being replaced by a 1.2 implementation.
+                     BOTAN_STATE_CHECK(m_downgrade_info);
+                     m_downgrade_info->will_downgrade = true;
+                     return 0;
+                     }
+                  else
+                     {
+                     // Downgrade can only happen if the first received message is a Server_Hello_12. This was not the case.
+                     m_downgrade_info.reset();
+                     }
                   }
-               else
+               }
+            else
+               {
+               while(auto handshake_msg = m_handshake_layer.next_post_handshake_message(policy()))
                   {
-                  // Downgrade can only happen if the first received message is a Server_Hello_12. This was not the case.
-                  m_downgrade_info.reset();
+                  // make sure Key_Update appears only at the end of a record; see description above
+                  if(std::holds_alternative<Key_Update>(handshake_msg.value()) && m_handshake_layer.has_pending_data())
+                     { throw Unexpected_Message("Unexpected additional post-handshake message data found in record"); }
+
+                  process_post_handshake_msg(std::move(handshake_msg.value()));
                   }
                }
             }
@@ -186,6 +201,11 @@ void Channel_Impl_13::send_handshake_message(const Handshake_Message_13_Ref mess
       preserve_client_hello(msg);
 
    send_record(Record_Type::HANDSHAKE, std::move(msg));
+   }
+
+void Channel_Impl_13::send_post_handshake_message(const Post_Handshake_Message_13 message)
+   {
+   send_record(Record_Type::HANDSHAKE, m_handshake_layer.prepare_post_handshake_message(message));
    }
 
 void Channel_Impl_13::send_dummy_change_cipher_spec()

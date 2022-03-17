@@ -9,6 +9,8 @@
 
 #if defined(BOTAN_HAS_TLS_13)
 
+#include <array>
+
 #include <botan/internal/tls_transcript_hash_13.h>
 
 using namespace Botan::TLS;
@@ -110,6 +112,23 @@ std::vector<Test::Result> transcript_hash()
          h.update({0xba, 0xad, 0xbe, 0xef});
          h.update({0x60, 0x0d, 0xf0, 0x0d});
          h.set_algorithm("SHA-256");
+
+         result.test_eq("c = SHA-256(baadbeef | goodfood)", h.current(), sha256("baadbeef600df00d"));
+         }),
+
+      CHECK("C-style update interface", [&](Test::Result& result)
+         {
+         Transcript_Hash_State h;
+
+         std::array<uint8_t, 2> baad{0xba, 0xad};
+         h.update(baad.data(), baad.size());
+         h.update({0xbe, 0xef});
+
+         h.set_algorithm("SHA-256");
+
+         std::array<uint8_t, 2> food{0xf0, 0x0d};
+         h.update({0x60, 0x0d});
+         h.update(food.data(), food.size());
 
          result.test_eq("c = SHA-256(baadbeef | goodfood)", h.current(), sha256("baadbeef600df00d"));
          }),

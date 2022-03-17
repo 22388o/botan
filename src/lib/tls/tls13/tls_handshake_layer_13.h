@@ -41,14 +41,41 @@ class BOTAN_TEST_API Handshake_Layer
       /**
        * Parses one handshake message off the internal buffer that is being filled using `copy_data`.
        *
-       * Return value contains either the number of bytes (`size_t`) needed to proceed
-       * with processing TLS records or a single parsed TLS handshake message.
-       *
        * @param policy the TLS policy
+       * @param transcript_hash the transcript hash state to be updated
+       *
+       * @return the parsed handshake message, or nullopt if more data is needed to complete the message
        */
       std::optional<Handshake_Message_13> next_message(const Policy& policy, Transcript_Hash_State& transcript_hash);
 
+      /**
+       * Parses one post-handshake message off the internal buffer that is being filled using `copy_data`.
+       *
+       * @param policy the TLS policy
+       *
+       * @return the parsed post-handshake message, or nullopt if more data is needed to complete the message
+       */
+      std::optional<Post_Handshake_Message_13> next_post_handshake_message(const Policy& policy);
+
+      /**
+       * Marshalls one handshake message for sending in an (encrypted) record and updates the
+       * provided transcript hash state accordingly.
+       *
+       * @param message the handshake message to be marshalled
+       * @param transcript_hash the transcript hash state to be updated
+       *
+       * @return the marshalled handshake message
+       */
       std::vector<uint8_t> prepare_message(const Handshake_Message_13_Ref message, Transcript_Hash_State& transcript_hash);
+
+      /**
+       * Marshalls one post-handshake message for sending in an (encrypted) record.
+       *
+       * @param message the post handshake message to be marshalled
+       *
+       * @return the marshalled post-handshake message
+       */
+      std::vector<uint8_t> prepare_post_handshake_message(const Post_Handshake_Message_13& message);
 
       // TODO: add interfaces and checks for conditions in 8446 5.1
       /**
@@ -58,10 +85,6 @@ class BOTAN_TEST_API Handshake_Layer
       bool has_pending_data() const { return !m_read_buffer.empty(); }
 
    private:
-      Handshake_Message_13 parse_message(const Botan::TLS::Policy& policy,
-                                         Botan::TLS::Handshake_Type type,
-                                         const std::vector<uint8_t>& msg);
-
       std::vector<uint8_t> m_read_buffer;
       Connection_Side m_peer;
    };

@@ -161,8 +161,26 @@ class BOTAN_TEST_API Cipher_State
       bool can_encrypt_application_traffic() const
          {
          return m_state != State::Uninitialized && m_state != State::HandshakeTraffic
-            && !m_write_key.empty() && !m_write_iv.empty();
+                && !m_write_key.empty() && !m_write_iv.empty();
          }
+
+      /**
+       * Updates the key material used for decrypting data
+       * This is triggered after we received a Key_Update from the peer.
+       *
+       * Note that this must not be called before the connection is ready for
+       * application traffic.
+       */
+      void update_read_keys();
+
+      /**
+       * Updates the key material used for encrypting data
+       * This is triggered after we send a Key_Update to the peer.
+       *
+       * Note that this must not be called before the connection is ready for
+       * application traffic.
+       */
+      void update_write_keys();
 
       /**
        * Remove handshake/traffic secrets for decrypting data from peer
@@ -189,9 +207,10 @@ class BOTAN_TEST_API Cipher_State
       std::vector<uint8_t> current_nonce(const uint64_t seq_no,
                                          const secure_vector<uint8_t>& iv) const;
 
-      void derive_traffic_secrets(const secure_vector<uint8_t>& client_traffic_secret,
-                                  const secure_vector<uint8_t>& server_traffic_secret,
-                                  const bool handshake_traffic_secrets = false);
+      void derive_write_traffic_key(const secure_vector<uint8_t>& traffic_secret,
+                                    const bool handshake_traffic_secret = false);
+      void derive_read_traffic_key(const secure_vector<uint8_t>& traffic_secret,
+                                   const bool handshake_traffic_secret = false);
 
       /**
        * HKDF-Extract from RFC 8446 7.1
@@ -241,13 +260,16 @@ class BOTAN_TEST_API Cipher_State
 
       secure_vector<uint8_t> m_salt;
 
+      secure_vector<uint8_t> m_write_application_traffic_secret;
+      secure_vector<uint8_t> m_read_application_traffic_secret;
+
       secure_vector<uint8_t> m_write_key;
       secure_vector<uint8_t> m_write_iv;
-      secure_vector<uint8_t> m_peer_write_key;
-      secure_vector<uint8_t> m_peer_write_iv;
+      secure_vector<uint8_t> m_read_key;
+      secure_vector<uint8_t> m_read_iv;
 
       uint64_t m_write_seq_no;
-      uint64_t m_peer_write_seq_no;
+      uint64_t m_read_seq_no;
 
       secure_vector<uint8_t> m_finished_key;
       secure_vector<uint8_t> m_peer_finished_key;

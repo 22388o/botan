@@ -48,8 +48,6 @@ class BOTAN_TEST_API Handshake_State_13_Base
       Certificate_Verify_13& store(Certificate_Verify_13 certificate_verify, const bool from_peer);
       Finished_13&           store(Finished_13 finished, const bool from_peer);
 
-      New_Session_Ticket_13& store(New_Session_Ticket_13 finished, const bool from_peer);
-
    private:
       template<typename MessageT>
       const MessageT& get(const std::optional<MessageT>& opt) const
@@ -78,10 +76,6 @@ class BOTAN_TEST_API Handshake_State_13_Base
       std::optional<Certificate_Verify_13> m_server_verify;
       std::optional<Finished_13> m_server_finished;
       std::optional<Finished_13> m_client_finished;
-
-      // TODO: TLS 1.3 allows sending an arbitrary number of such messages
-      //       we need a better way to handle post-handshake messages
-      std::optional<New_Session_Ticket_13> m_new_session_ticket;
    };
 }
 

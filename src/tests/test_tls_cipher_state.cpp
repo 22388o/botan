@@ -92,6 +92,7 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
       "4e cd 0e b6 ec 3b 4d 87 f5 d6 02 8f 92 2c a4 c5"
       "85 1a 27 7f d4 13 11 c9 e6 2d 2c 94 92 e1 c4 f3");
 
+   // this is not part of RFC 8448
    const std::string export_label   = "export_test_label";
    const std::string export_context = "rfc8448_rtt1";
    const auto expected_key_export = Botan::hex_decode_locked(
@@ -270,17 +271,17 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
          "17" /* to-be-encrypted content type */)
       );
 
+   auto cipher = Ciphersuite::from_name("AES_128_GCM_SHA256").value();
+
+   // initialize Cipher_State with client_hello...server_hello
+   auto my_shared_secret = shared_secret;
+   auto cs = Cipher_State::init_with_server_hello(Connection_Side::CLIENT, std::move(my_shared_secret), cipher,
+         th_server_hello);
+
    return
       {
       CHECK("handshake traffic without PSK (client side)", [&](Test::Result& result)
          {
-         auto cipher = Ciphersuite::from_name("AES_128_GCM_SHA256").value();
-
-         // initialize Cipher_State with client_hello...server_hello
-         auto my_shared_secret = shared_secret;
-         auto cs = Cipher_State::init_with_server_hello(Connection_Side::CLIENT, std::move(my_shared_secret), cipher,
-               th_server_hello);
-
          result.confirm("can not yet write application data", !cs->can_encrypt_application_traffic());
          result.confirm("can not yet export key material", !cs->can_export_keys());
 
@@ -333,11 +334,23 @@ std::vector<Test::Result> test_secret_derivation_rfc8448_rtt1()
 
          result.confirm("can export key material still", cs->can_export_keys());
          result.test_eq("key export result did not change", cs->export_key(export_label, export_context, 16), expected_key_export);
+      }),
 
+      CHECK("PSK", [&](Test::Result &result) {
          // derive PSK for resumption
          const auto psk = cs->psk({0x00, 0x00} /* ticket_nonce as defined in RFC 8448 */);
          result.test_eq("PSK matches", psk, expected_psk);
 
+      }),
+
+      CHECK("key update", [&](Test::Result &result) {
+         cs->update_read_keys();
+         cs->update_write_keys();
+
+         result.confirm("can encrypt application traffic", cs->can_encrypt_application_traffic());
+      }),
+
+      CHECK("cleanup", [&](Test::Result &result) {
          // cleanup
          cs->clear_write_keys();
          result.confirm("can no longer write application data", !cs->can_encrypt_application_traffic());

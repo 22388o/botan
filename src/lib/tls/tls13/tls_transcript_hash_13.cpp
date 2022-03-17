@@ -58,19 +58,19 @@ Transcript_Hash_State Transcript_Hash_State::recreate_after_hello_retry_request(
    return ths;
    }
 
-void Transcript_Hash_State::update(const std::vector<uint8_t>& serialized_message)
+void Transcript_Hash_State::update(const uint8_t* serialized_message, const size_t serialized_message_length)
    {
    if(m_hash != nullptr)
       {
       // Botan does not support finalizing a HashFunction without resetting
       // the internal state of the hash. Hence we first copy the internal
       // state and then finalize the transient HashFunction.
-      m_hash->update(serialized_message);
+      m_hash->update(serialized_message, serialized_message_length);
       m_previous = std::exchange(m_current, m_hash->copy_state()->final_stdvec());
       }
    else
       {
-      m_unprocessed_transcript.push_back(serialized_message);
+      m_unprocessed_transcript.push_back(std::vector(serialized_message, serialized_message + serialized_message_length));
       }
    }
 

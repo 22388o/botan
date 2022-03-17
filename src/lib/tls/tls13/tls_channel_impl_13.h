@@ -116,7 +116,10 @@ class Channel_Impl_13 : public Channel_Impl
 
    protected:
       virtual void process_handshake_msg(Handshake_Message_13 msg) = 0;
+      virtual void process_post_handshake_msg(Post_Handshake_Message_13 msg) = 0;
+
       void send_handshake_message(const Handshake_Message_13_Ref message);
+      void send_post_handshake_message(const Post_Handshake_Message_13 message);
       void send_dummy_change_cipher_spec();
 
       Callbacks& callbacks() const { return m_callbacks; }

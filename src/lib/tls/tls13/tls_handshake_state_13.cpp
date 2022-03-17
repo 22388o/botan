@@ -61,10 +61,4 @@ Finished_13& Handshake_State_13_Base::store(Finished_13 finished, const bool fro
    return target.value();
 }
 
-New_Session_Ticket_13& Handshake_State_13_Base::store(New_Session_Ticket_13 new_session_ticket, const bool)
-{
-   m_new_session_ticket = std::move(new_session_ticket);
-   return m_new_session_ticket.value();
-}
-
 }

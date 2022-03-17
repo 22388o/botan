@@ -58,6 +58,8 @@ void Client_Impl_13::process_handshake_msg(Handshake_Message_13 message)
       }, m_handshake_state.received(std::move(message)));
    }
 
+void Client_Impl_13::process_post_handshake_msg(Post_Handshake_Message_13 ) {}
+
 std::vector<Handshake_Type> Client_Impl_13::expected_post_handshake_messages() const
    {
    BOTAN_STATE_CHECK(!is_closed());
@@ -356,6 +358,27 @@ void Client_Impl_13::handle(const Finished_13& finished_msg)
 
 void TLS::Client_Impl_13::handle(const New_Session_Ticket_13&)
    {
+   m_transitions.set_expected_next(expected_post_handshake_messages());
+   }
+
+void TLS::Client_Impl_13::handle(const Key_Update& key_update)
+   {
+   m_cipher_state->update_read_keys();
+
+   // TODO: introduce some kind of rate limit of key updates, otherwise we
+   //       might be forced into an endless loop of key updates.
+
+   // RFC 8446 4.6.3
+   //    If the request_update field is set to "update_requested", then the
+   //    receiver MUST send a KeyUpdate of its own with request_update set to
+   //    "update_not_requested" prior to sending its next Application Data
+   //    record.
+   if(key_update.expects_reciprocation())
+      {
+      send_post_handshake_message(Key_Update(false /* update not requested */));
+      m_cipher_state->update_write_keys();
+      }
+
    m_transitions.set_expected_next(expected_post_handshake_messages());
    }
 

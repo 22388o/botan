@@ -117,9 +117,23 @@ void Cipher_State::advance_with_server_finished(const Transcript_Hash& transcrip
 
    const auto master_secret = hkdf_extract(secure_vector<uint8_t>(m_hash->output_length(), 0x00));
 
-   derive_traffic_secrets(
-      derive_secret(master_secret, "c ap traffic", transcript_hash),
-      derive_secret(master_secret, "s ap traffic", transcript_hash));
+   auto client_application_traffic_secret = derive_secret(master_secret, "c ap traffic", transcript_hash);
+   auto server_application_traffic_secret = derive_secret(master_secret, "s ap traffic", transcript_hash);
+
+   if(m_connection_side == Connection_Side::SERVER)
+      {
+      derive_read_traffic_key(client_application_traffic_secret);
+      derive_write_traffic_key(server_application_traffic_secret);
+      m_read_application_traffic_secret = std::move(client_application_traffic_secret);
+      m_write_application_traffic_secret      = std::move(server_application_traffic_secret);
+      }
+   else
+      {
+      derive_read_traffic_key(server_application_traffic_secret);
+      derive_write_traffic_key(client_application_traffic_secret);
+      m_read_application_traffic_secret = std::move(server_application_traffic_secret);
+      m_write_application_traffic_secret      = std::move(client_application_traffic_secret);
+      }
 
    m_exporter_master_secret = derive_secret(master_secret, "exp master", transcript_hash);
 
@@ -169,9 +183,9 @@ uint64_t Cipher_State::encrypt_record_fragment(const std::vector<uint8_t>& heade
 uint64_t Cipher_State::decrypt_record_fragment(const std::vector<uint8_t>& header,
       secure_vector<uint8_t>& encrypted_fragment)
    {
-   m_decrypt->set_key(m_peer_write_key);
+   m_decrypt->set_key(m_read_key);
    m_decrypt->set_associated_data_vec(header);
-   m_decrypt->start(current_nonce(m_peer_write_seq_no, m_peer_write_iv));
+   m_decrypt->start(current_nonce(m_read_seq_no, m_read_iv));
 
    try
       {
@@ -186,7 +200,7 @@ uint64_t Cipher_State::decrypt_record_fragment(const std::vector<uint8_t>& heade
       throw Invalid_Authentication_Tag(ex.what());
       }
 
-   return m_peer_write_seq_no++;
+   return m_read_seq_no++;
    }
 
 size_t Cipher_State::encrypt_output_length(const size_t input_length) const
@@ -276,7 +290,7 @@ Cipher_State::Cipher_State(Connection_Side whoami, const Ciphersuite& cipher)
    , m_hash(HashFunction::create_or_throw(cipher.prf_algo()))
    , m_salt(m_hash->output_length(), 0x00)
    , m_write_seq_no(0)
-   , m_peer_write_seq_no(0) {}
+   , m_read_seq_no(0) {}
 
 Cipher_State::~Cipher_State() = default;
 
@@ -297,45 +311,52 @@ void Cipher_State::advance_with_server_hello(secure_vector<uint8_t>&& shared_sec
 
    const auto handshake_secret = hkdf_extract(std::move(shared_secret));
 
-   derive_traffic_secrets(
-      derive_secret(handshake_secret, "c hs traffic", transcript_hash),
-      derive_secret(handshake_secret, "s hs traffic", transcript_hash),
-      true);
+   const auto client_handshake_traffic_secret = derive_secret(handshake_secret, "c hs traffic", transcript_hash);
+   const auto server_handshake_traffic_secret = derive_secret(handshake_secret, "s hs traffic", transcript_hash);
+
+   if(m_connection_side == Connection_Side::SERVER)
+      {
+      derive_read_traffic_key(client_handshake_traffic_secret, true);
+      derive_write_traffic_key(server_handshake_traffic_secret, true);
+      }
+   else
+      {
+      derive_read_traffic_key(server_handshake_traffic_secret, true);
+      derive_write_traffic_key(client_handshake_traffic_secret, true);
+      }
 
    m_salt = derive_secret(handshake_secret, "derived", empty_hash());
 
    m_state = State::HandshakeTraffic;
    }
 
-void Cipher_State::derive_traffic_secrets(const secure_vector<uint8_t>& client_traffic_secret,
-      const secure_vector<uint8_t>& server_traffic_secret,
-      const bool handshake_traffic_secrets)
+void Cipher_State::derive_write_traffic_key(const secure_vector<uint8_t>& traffic_secret,
+      const bool handshake_traffic_secret)
    {
-   const auto& traffic_secret =
-      (m_connection_side == Connection_Side::CLIENT)
-      ? client_traffic_secret
-      : server_traffic_secret;
-
-   const auto& peer_traffic_secret =
-      (m_connection_side == Connection_Side::SERVER)
-      ? client_traffic_secret
-      : server_traffic_secret;
-
-   m_write_key = hkdf_expand_label(traffic_secret, "key", {}, m_encrypt->minimum_keylength());
-   m_peer_write_key = hkdf_expand_label(peer_traffic_secret, "key", {}, m_decrypt->minimum_keylength());
-
-   m_write_iv = hkdf_expand_label(traffic_secret, "iv", {}, m_nonce_length);
-   m_peer_write_iv = hkdf_expand_label(peer_traffic_secret, "iv", {}, m_nonce_length);
-
+   m_write_key    = hkdf_expand_label(traffic_secret, "key", {}, m_encrypt->minimum_keylength());
+   m_write_iv     = hkdf_expand_label(traffic_secret, "iv", {}, m_nonce_length);
    m_write_seq_no = 0;
-   m_peer_write_seq_no = 0;
 
-   if(handshake_traffic_secrets)
+   if(handshake_traffic_secret)
       {
       // Key derivation for the MAC in the "Finished" handshake message as described in RFC 8446 4.4.4
       // (will be cleared in advance_with_server_finished())
       m_finished_key = hkdf_expand_label(traffic_secret, "finished", {}, m_hash->output_length());
-      m_peer_finished_key = hkdf_expand_label(peer_traffic_secret, "finished", {}, m_hash->output_length());
+      }
+   }
+
+void Cipher_State::derive_read_traffic_key(const secure_vector<uint8_t>& traffic_secret,
+      const bool handshake_traffic_secret)
+   {
+   m_read_key    = hkdf_expand_label(traffic_secret, "key", {}, m_encrypt->minimum_keylength());
+   m_read_iv     = hkdf_expand_label(traffic_secret, "iv", {}, m_nonce_length);
+   m_read_seq_no = 0;
+
+   if(handshake_traffic_secret)
+      {
+      // Key derivation for the MAC in the "Finished" handshake message as described in RFC 8446 4.4.4
+      // (will be cleared in advance_with_server_finished())
+      m_peer_finished_key = hkdf_expand_label(traffic_secret, "finished", {}, m_hash->output_length());
       }
    }
 
@@ -395,14 +416,37 @@ std::vector<uint8_t> Cipher_State::empty_hash() const
    return m_hash->final_stdvec();
    }
 
+void Cipher_State::update_read_keys()
+   {
+   BOTAN_ASSERT_NOMSG(m_state == State::ApplicationTraffic ||
+                      m_state == State::Completed);
+
+   m_read_application_traffic_secret =
+      hkdf_expand_label(m_read_application_traffic_secret, "traffic upd", {}, m_hash->output_length());
+
+   derive_read_traffic_key(m_read_application_traffic_secret);
+   }
+
+void Cipher_State::update_write_keys()
+   {
+   BOTAN_ASSERT_NOMSG(m_state == State::ApplicationTraffic ||
+                      m_state == State::Completed);
+   m_write_application_traffic_secret =
+      hkdf_expand_label(m_write_application_traffic_secret, "traffic upd", {}, m_hash->output_length());
+
+   derive_read_traffic_key(m_write_application_traffic_secret);
+   }
+
 void Cipher_State::clear_read_keys()
    {
-   zap(m_peer_write_key);
-   zap(m_peer_write_iv);
+   zap(m_read_key);
+   zap(m_read_iv);
+   zap(m_read_application_traffic_secret);
    }
 
 void Cipher_State::clear_write_keys()
    {
    zap(m_write_key);
    zap(m_write_iv);
+   zap(m_write_application_traffic_secret);
    }
