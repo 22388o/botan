@@ -23,7 +23,6 @@
 #include <botan/tls_ciphersuite.h>
 #include <botan/pk_keys.h>
 #include <botan/x509cert.h>
-#include <botan/ocsp.h>
 
 #if defined(BOTAN_HAS_CECPQ1)
    #include <botan/cecpq1.h>
@@ -33,6 +32,10 @@ namespace Botan {
 
 class Public_Key;
 class Credentials_Manager;
+
+namespace OCSP {
+class Response;
+}
 
 namespace TLS {
 
@@ -521,11 +524,6 @@ class BOTAN_UNSTABLE_API Certificate_13 final : public Handshake_Message
       size_t count() const { return m_entries.size(); }
       bool empty() const { return m_entries.empty(); }
 
-      Certificate_13(Handshake_IO& io,
-                     Handshake_Hash& hash,
-                     std::vector<Certificate_Entry> certs,
-                     const Connection_Side side);
-
       /**
       * Deserialize a Certificate message
       * @param buf the serialized message
@@ -543,6 +541,17 @@ class BOTAN_UNSTABLE_API Certificate_13 final : public Handshake_Message
       * @param requested_extensions Extensions of Client_Hello or Certificate_Req messages
       */
       void validate_extensions(const Extensions& requested_extensions) const;
+
+      /**
+       * Verify the certificate chain
+       *
+       * @throws if verification fails.
+       */
+      void verify(Callbacks& callbacks,
+                  const Policy& policy,
+                  Credentials_Manager& creds,
+                  const std::string& hostname,
+                  bool use_ocsp) const;
 
       std::vector<uint8_t> serialize() const override;
 

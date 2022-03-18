@@ -305,26 +305,11 @@ void Client_Impl_13::handle(const Encrypted_Extensions& encrypted_extensions_msg
 void Client_Impl_13::handle(const Certificate_13& certificate_msg)
    {
    certificate_msg.validate_extensions(m_handshake_state.client_hello().extensions());
-   const auto& server_certs = certificate_msg.cert_chain();
-
-   // RFC 8446 4.4.2.4
-   //    If the server supplies an empty Certificate message, the client
-   //    MUST abort the handshake with a "decode_error" alert.
-   if(server_certs.empty())
-      { throw TLS_Exception(Alert::DECODE_ERROR, "Client: No certificates sent by server"); }
-
-   auto trusted_CAs = credentials_manager().trusted_certificate_authorities("tls-client", m_info.hostname());
-
-   std::vector<X509_Certificate> certs;
-   std::transform(server_certs.cbegin(), server_certs.cend(), std::back_inserter(certs),
-   [](const auto& entry) { return entry.certificate; });
-
-   callbacks().tls_verify_cert_chain(certs,
-                                     {},  // TODO: Support OCSP stapling via RFC8446 4.4.2.1
-                                     trusted_CAs,
-                                     Usage_Type::TLS_SERVER_AUTH,
-                                     m_info.hostname(),
-                                     policy());
+   certificate_msg.verify(callbacks(),
+                          policy(),
+                          credentials_manager(),
+                          m_info.hostname(),
+                          m_handshake_state.client_hello().extensions().has<Certificate_Status_Request>());
 
    m_transitions.set_expected_next(CERTIFICATE_VERIFY);
    }

@@ -7,6 +7,10 @@
 */
 
 #include <botan/tls_messages.h>
+
+#include <botan/credentials_manager.h>
+#include <botan/ocsp.h>
+#include <botan/tls_callbacks.h>
 #include <botan/tls_extensions.h>
 #include <botan/tls_exceptn.h>
 #include <botan/tls_alert.h>
@@ -17,19 +21,6 @@
 #include <botan/data_src.h>
 
 namespace Botan::TLS {
-
-/**
-* Create a new Certificate message
-*/
-Certificate_13::Certificate_13(Handshake_IO& io,
-                               Handshake_Hash& hash,
-                               std::vector<Certificate_Entry> entries,
-                               const Connection_Side side) :
-   m_entries(std::move(entries)),
-   m_side(side)
-   {
-   hash.update(io.send(*this));
-   }
 
 void Certificate_13::validate_extensions(const Extensions& requested_extensions) const
    {
@@ -42,6 +33,42 @@ void Certificate_13::validate_extensions(const Extensions& requested_extensions)
       for(const auto& ext_type : entry.extensions.extension_types())
          if(!requested_extensions.has(ext_type))
             { throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Unexpected extension received"); }
+   }
+
+void Certificate_13::verify(Callbacks& callbacks,
+                            const Policy& policy,
+                            Credentials_Manager& creds,
+                            const std::string& hostname,
+                            bool use_ocsp) const
+   {
+   // RFC 8446 4.4.2.4
+   //    If the server supplies an empty Certificate message, the client
+   //    MUST abort the handshake with a "decode_error" alert.
+   if(m_entries.empty())
+      { throw TLS_Exception(Alert::DECODE_ERROR, "Client: No certificates sent by server"); }
+
+   auto trusted_CAs = creds.trusted_certificate_authorities("tls-client", hostname);
+
+   std::vector<X509_Certificate> certs;
+   std::vector<std::optional<OCSP::Response>> ocsp_responses;
+   for (const auto& entry : m_entries)
+      {
+      certs.push_back(entry.certificate);
+      if(use_ocsp)
+         {
+         if(entry.extensions.has<Certificate_Status_Request>())
+            // The response inside the extension can still be emtpy. This will be treated as an error during
+            // construction of the OCSP response.
+            ocsp_responses.push_back(entry.extensions.get<Certificate_Status_Request>()->get_ocsp_response());
+         else
+            // Note: The make_optional instead of simply nullopt is necessary to work around a GCC <= 10.0 bug
+            //       see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
+            ocsp_responses.push_back(std::make_optional<OCSP::Response>());
+         }
+      }
+
+   const auto usage = (m_side == CLIENT) ? Usage_Type::TLS_CLIENT_AUTH : Usage_Type::TLS_SERVER_AUTH;
+   callbacks.tls_verify_cert_chain(certs, ocsp_responses, trusted_CAs, usage, hostname, policy);
    }
 
 /**

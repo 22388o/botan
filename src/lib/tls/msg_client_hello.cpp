@@ -539,8 +539,6 @@ Client_Hello_13::Client_Hello_13(const Policy& policy,
    // TODO: this is currently hard-coded to PSK_DHE_KE (to please RFC 8448)
    m_extensions.add(new PSK_Key_Exchange_Modes({PSK_Key_Exchange_Mode::PSK_DHE_KE}));
 
-   // TODO: actually check the OCSP information provided in the Certificate_Status_Request
-   //       extensions in the Certificate handshake message
    if(policy.support_cert_status_message())
       m_extensions.add(new Certificate_Status_Request({}, {}));
 
