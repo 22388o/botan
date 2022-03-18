@@ -66,7 +66,7 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
    try
       {
       if(expects_downgrade())
-         preserve_peer_transcript(input, input_size);
+         { preserve_peer_transcript(input, input_size); }
 
       m_record_layer.copy_data(std::vector(input, input+input_size));
 
@@ -88,8 +88,7 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
             {
             m_handshake_layer.copy_data(unlock(record.fragment));  // TODO: record fragment should be an ordinary std::vector
 
-            const bool post_handshake = is_active();
-            if (!post_handshake)
+            if(!handshake_finished())
                {
                while(auto handshake_msg = m_handshake_layer.next_message(policy(), m_transcript_hash))
                   {
@@ -145,15 +144,7 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
             }
          else if(record.type == CHANGE_CIPHER_SPEC)
             {
-            // RFC 8446 5.
-            //    An implementation may receive an unencrypted record of type change_cipher_spec
-            //    [...]
-            //    at any time after the first ClientHello message has been sent or received
-            //    and before the peer's Finished message has been received
-            //    TODO: Unexpected_Message otherwise
-            //    [...]
-            //    and MUST simply drop it without further processing.
-            // TODO: Send CCS in response / middlebox compatibility mode to be defined via the policy
+            process_dummy_change_cipher_spec();
             }
          else if(record.type == APPLICATION_DATA)
             {
@@ -198,7 +189,7 @@ void Channel_Impl_13::send_handshake_message(const Handshake_Message_13_Ref mess
    auto msg = m_handshake_layer.prepare_message(message, m_transcript_hash);
 
    if(expects_downgrade() && std::holds_alternative<std::reference_wrapper<Client_Hello_13>>(message))
-      preserve_client_hello(msg);
+      { preserve_client_hello(msg); }
 
    send_record(Record_Type::HANDSHAKE, std::move(msg));
    }
@@ -308,8 +299,8 @@ void Channel_Impl_13::expect_downgrade(const Server_Information& server_info)
    {
    Downgrade_Information di
       {
-      {},
-      {},
+         {},
+         {},
       server_info,
       callbacks(),
       session_manager(),

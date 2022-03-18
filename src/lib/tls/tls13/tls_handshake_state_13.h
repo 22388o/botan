@@ -24,7 +24,12 @@ namespace Internal {
 class BOTAN_TEST_API Handshake_State_13_Base
    {
    public:
+      bool has_client_hello() const { return m_client_hello.has_value(); }
       bool has_hello_retry_request() const { return m_hello_retry_request.has_value(); }
+      bool has_server_finished() const { return m_server_finished.has_value(); }
+      bool has_client_finished() const { return m_client_finished.has_value(); }
+
+      bool handshake_finished() const { return has_server_finished() && has_client_finished(); }
 
       // Client_Hello_13 cannot be const because it might need modification due to a Hello_Retry_Request
       Client_Hello_13&       client_hello() { return get(m_client_hello); }

@@ -34,7 +34,7 @@ Client_Impl_13::Client_Impl_13(Callbacks& callbacks,
 
 #if defined(BOTAN_HAS_TLS_12)
    if(policy.allow_tls12())
-      expect_downgrade(info);
+      { expect_downgrade(info); }
 #endif
 
    Client_Hello::Settings client_settings(TLS::Protocol_Version::TLS_V13, m_info.hostname());
@@ -58,15 +58,39 @@ void Client_Impl_13::process_handshake_msg(Handshake_Message_13 message)
       }, m_handshake_state.received(std::move(message)));
    }
 
-void Client_Impl_13::process_post_handshake_msg(Post_Handshake_Message_13 ) {}
-
-std::vector<Handshake_Type> Client_Impl_13::expected_post_handshake_messages() const
+void Client_Impl_13::process_post_handshake_msg(Post_Handshake_Message_13 message)
    {
-   BOTAN_STATE_CHECK(!is_closed());
-   // TODO: This list may contain CERTIFICATE_REQUEST iff the client hello advertised
-   //       support for post-handshake authentication via the post_handshake_auth
-   //       extension. (RFC 8446 4.6.2)
-   return { NEW_SESSION_TICKET, KEY_UPDATE };
+   BOTAN_STATE_CHECK(handshake_finished());
+
+   std::visit([&](auto msg)
+      {
+      handle(msg);
+      }, std::move(message));
+   }
+
+void Client_Impl_13::process_dummy_change_cipher_spec()
+   {
+   // RFC 8446 5.
+   //    If an implementation detects a change_cipher_spec record received before
+   //    the first ClientHello message or after the peer's Finished message, it MUST be
+   //    treated as an unexpected record type [("unexpected_message" alert)].
+   if(!m_handshake_state.has_client_hello() || m_handshake_state.has_server_finished())
+      {
+      throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "Received an unexpected dummy Change Cipher Spec");
+      }
+
+   // RFC 8446 5.
+   //    An implementation may receive an unencrypted record of type change_cipher_spec [...]
+   //    at any time after the first ClientHello message has been sent or received
+   //    and before the peer's Finished message has been received [...]
+   //    and MUST simply drop it without further processing.
+   //
+   // ... no further processing.
+   }
+
+bool Client_Impl_13::handshake_finished() const
+   {
+   return m_handshake_state.handshake_finished();
    }
 
 namespace  {
@@ -351,14 +375,14 @@ void Client_Impl_13::handle(const Finished_13& finished_msg)
 
    // TODO: save session and invoke tls_session_established callback
 
-   m_transitions.set_expected_next(expected_post_handshake_messages());
+   // no more handshake messages expected
+   m_transitions.set_expected_next({});
 
    callbacks().tls_session_activated();
    }
 
 void TLS::Client_Impl_13::handle(const New_Session_Ticket_13&)
    {
-   m_transitions.set_expected_next(expected_post_handshake_messages());
    }
 
 void TLS::Client_Impl_13::handle(const Key_Update& key_update)
@@ -378,8 +402,6 @@ void TLS::Client_Impl_13::handle(const Key_Update& key_update)
       send_post_handshake_message(Key_Update(false /* update not requested */));
       m_cipher_state->update_write_keys();
       }
-
-   m_transitions.set_expected_next(expected_post_handshake_messages());
    }
 
 std::vector<X509_Certificate> Client_Impl_13::peer_cert_chain() const
