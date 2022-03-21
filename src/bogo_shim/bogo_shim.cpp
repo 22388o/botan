@@ -1020,6 +1020,10 @@ class Shim_Policy final : public Botan::TLS::Policy
             if(m_args.flag_set("decline-ocsp-callback"))
                return false;
             }
+         else
+            if(!m_args.flag_set("enable-ocsp-stapling"))
+               return false;
+
          return true;
          }
 
