@@ -28,7 +28,8 @@ Client_Impl_13::Client_Impl_13(Callbacks& callbacks,
                                const std::vector<std::string>& next_protocols,
                                size_t io_buf_sz) :
    Channel_Impl_13(callbacks, session_manager, creds, rng, policy, false, io_buf_sz),
-   m_info(info)
+   m_info(info),
+   m_should_send_ccs(false)
    {
    BOTAN_ASSERT_NOMSG(offer_version == Protocol_Version::TLS_V13);
 
@@ -45,6 +46,15 @@ Client_Impl_13::Client_Impl_13(Callbacks& callbacks,
                              std::vector<uint8_t>(),
                              client_settings,
                              next_protocols)));
+
+   // RFC 8446 Appendix D.4
+   //    If not offering early data, the client sends a dummy change_cipher_spec
+   //    record [...] immediately before its second flight. This may either be before
+   //    its second ClientHello or before its encrypted handshake flight.
+   //
+   // TODO: don't schedule ccs here when early data is used
+   if(policy.tls_13_middlebox_compatibility_mode())
+      m_should_send_ccs = true;
 
    m_transitions.set_expected_next({SERVER_HELLO, HELLO_RETRY_REQUEST});
    }
@@ -271,17 +281,6 @@ void Client_Impl_13::handle(const Hello_Retry_Request& hrr)
 
    callbacks().tls_examine_extensions(hrr.extensions(), SERVER);
 
-   // RFC 8446 Appendix D.4
-   //    If not offering early data, the client sends a dummy change_cipher_spec
-   //    record [...] immediately before its second flight. This may either be before
-   //    its second ClientHello or before its encrypted handshake flight.
-   //
-   // TODO: once early data support is implemented, this will need to be omitted
-   if(policy().tls_13_middlebox_compatibility_mode())
-      {
-      send_dummy_change_cipher_spec();
-      }
-
    send_handshake_message(ch);
 
    // RFC 8446 4.1.4
@@ -346,17 +345,6 @@ void Client_Impl_13::handle(const Finished_13& finished_msg)
                            m_transcript_hash.previous()))
       { throw TLS_Exception(Alert::DECRYPT_ERROR, "Finished message didn't verify"); }
 
-   // RFC 8446 Appendix D.4
-   //    If not offering early data, the client sends a dummy change_cipher_spec
-   //    record [...] immediately before its second flight. This may either be before
-   //    its second ClientHello or before its encrypted handshake flight.
-   //
-   // TODO: once early data support is implemented, this will need to be omitted
-   if(policy().tls_13_middlebox_compatibility_mode())
-      {
-      send_dummy_change_cipher_spec();
-      }
-
    // send client finished handshake message (still using handshake traffic secrets)
    send_handshake_message(m_handshake_state.sent(Finished_13(m_cipher_state.get(),
                           m_transcript_hash.current())));
@@ -401,6 +389,11 @@ std::vector<X509_Certificate> Client_Impl_13::peer_cert_chain() const
    {
    throw Not_Implemented("peer cert chain is not implemented");
    return std::vector<X509_Certificate>();
+   }
+
+bool Client_Impl_13::prepend_ccs()
+   {
+   return std::exchange(m_should_send_ccs, false);
    }
 
 }

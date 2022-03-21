@@ -76,6 +76,7 @@ class Client_Impl_13 : public Channel_Impl_13
       void process_dummy_change_cipher_spec() override;
 
       bool handshake_finished() const override;
+      bool prepend_ccs() override;
 
       void handle(const Server_Hello_12& server_hello_msg);
       void handle(const Server_Hello_13& server_hello_msg);
@@ -93,6 +94,8 @@ class Client_Impl_13 : public Channel_Impl_13
 
       Client_Handshake_State_13 m_handshake_state;
       Handshake_Transitions m_transitions;
+
+      bool m_should_send_ccs;
    };
 
 }

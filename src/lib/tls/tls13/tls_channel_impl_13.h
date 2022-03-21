@@ -120,6 +120,15 @@ class Channel_Impl_13 : public Channel_Impl
       virtual void process_dummy_change_cipher_spec() = 0;
       virtual bool handshake_finished() const = 0;
 
+      /**
+       * @return whether a change cipher spec record should be prepended _now_
+       *
+       * This method can be used by subclasses to indicate that send_record
+       * should prepend a CCS before the actual record. This is useful for
+       * middlebox compatibility mode. See RFC 8446 D.4.
+       */
+      virtual bool prepend_ccs() { return false; }
+
       void send_handshake_message(const Handshake_Message_13_Ref message);
       void send_post_handshake_message(const Post_Handshake_Message_13 message);
       void send_dummy_change_cipher_spec();

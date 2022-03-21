@@ -266,8 +266,15 @@ void Channel_Impl_13::send_record(uint8_t record_type, const std::vector<uint8_t
    {
    BOTAN_STATE_CHECK(!is_downgrading());
    BOTAN_STATE_CHECK(m_can_write);
-   const auto to_write = m_record_layer.prepare_records(static_cast<Record_Type>(record_type),
-                         record, m_cipher_state.get());
+
+   auto to_write = m_record_layer.prepare_records(static_cast<Record_Type>(record_type), record, m_cipher_state.get());
+
+   if(prepend_ccs())
+      {
+      const auto ccs = m_record_layer.prepare_records(Record_Type::CHANGE_CIPHER_SPEC, {0x01}, m_cipher_state.get());
+      to_write = concat(ccs, to_write);
+      }
+
    callbacks().tls_emit_data(to_write.data(), to_write.size());
    }
 
