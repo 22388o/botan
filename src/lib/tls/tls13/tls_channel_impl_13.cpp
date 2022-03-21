@@ -186,6 +186,8 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
 
 void Channel_Impl_13::send_handshake_message(const Handshake_Message_13_Ref message)
    {
+   std::visit([&](const auto msg) { callbacks().tls_inspect_handshake_msg(msg.get()); }, message);
+
    auto msg = m_handshake_layer.prepare_message(message, m_transcript_hash);
 
    if(expects_downgrade() && std::holds_alternative<std::reference_wrapper<Client_Hello_13>>(message))

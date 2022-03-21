@@ -53,7 +53,13 @@ void Client_Impl_13::process_handshake_msg(Handshake_Message_13 message)
    {
    std::visit([&](auto msg)
       {
+      // first verify that the message was expected by the state machine...
       m_transitions.confirm_transition_to(msg.get().type());
+
+      // ... then allow the library user to abort on their discretion
+      callbacks().tls_inspect_handshake_msg(msg.get());
+
+      // ... finally handle the message
       handle(msg.get());
       }, m_handshake_state.received(std::move(message)));
    }
@@ -240,7 +246,7 @@ void Client_Impl_13::handle(const Server_Hello_13& sh)
                     cipher.value(),
                     m_transcript_hash.current());
 
-   callbacks().tls_examine_extensions(m_handshake_state.server_hello().extensions(), SERVER);
+   callbacks().tls_examine_extensions(sh.extensions(), SERVER);
 
    m_transitions.set_expected_next(ENCRYPTED_EXTENSIONS);
    }
@@ -262,6 +268,8 @@ void Client_Impl_13::handle(const Hello_Retry_Request& hrr)
                        m_transcript_hash);
 
    ch.retry(hrr, callbacks(), rng());
+
+   callbacks().tls_examine_extensions(hrr.extensions(), SERVER);
 
    // RFC 8446 Appendix D.4
    //    If not offering early data, the client sends a dummy change_cipher_spec
