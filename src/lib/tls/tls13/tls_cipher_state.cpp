@@ -183,22 +183,14 @@ uint64_t Cipher_State::encrypt_record_fragment(const std::vector<uint8_t>& heade
 uint64_t Cipher_State::decrypt_record_fragment(const std::vector<uint8_t>& header,
       secure_vector<uint8_t>& encrypted_fragment)
    {
+   BOTAN_ARG_CHECK(encrypted_fragment.size() >= m_decrypt->minimum_final_size(),
+         "fragment too short to decrypt");
+
    m_decrypt->set_key(m_read_key);
    m_decrypt->set_associated_data_vec(header);
    m_decrypt->start(current_nonce(m_read_seq_no, m_read_iv));
 
-   try
-      {
-      m_decrypt->finish(encrypted_fragment);
-      }
-   catch(const Decoding_Error& ex)
-      {
-      // Decoding_Error is thrown by AEADs if the provided cipher text was
-      // too short to hold an authentication tag. We are treating this as
-      // an Invalid_Authentication_Tag so that the TLS channel will react
-      // with an BAD_RECORD_MAC alert as specified in RFC 8446 5.2.
-      throw Invalid_Authentication_Tag(ex.what());
-      }
+   m_decrypt->finish(encrypted_fragment);
 
    return m_read_seq_no++;
    }
@@ -206,6 +198,16 @@ uint64_t Cipher_State::decrypt_record_fragment(const std::vector<uint8_t>& heade
 size_t Cipher_State::encrypt_output_length(const size_t input_length) const
    {
    return m_encrypt->output_length(input_length);
+   }
+
+size_t Cipher_State::decrypt_output_length(const size_t input_length) const
+   {
+   return m_decrypt->output_length(input_length);
+   }
+
+size_t Cipher_State::minimum_decryption_input_length() const
+   {
+   return m_decrypt->minimum_final_size();
    }
 
 std::vector<uint8_t> Cipher_State::finished_mac(const Transcript_Hash& transcript_hash) const

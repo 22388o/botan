@@ -111,6 +111,16 @@ class BOTAN_TEST_API Cipher_State
       size_t encrypt_output_length(const size_t input_length) const;
 
       /**
+       * @returns  number of bytes needed to decrypt \p input_length bytes
+       */
+      size_t decrypt_output_length(const size_t input_length) const;
+
+      /**
+       * @returns  the minimum ciphertext length for decryption
+       */
+      size_t minimum_decryption_input_length() const;
+
+      /**
        * Calculate the MAC for a TLS "Finished" handshake message (RFC 8446 4.4.4)
        */
       std::vector<uint8_t> finished_mac(const Transcript_Hash& transcript_hash) const;

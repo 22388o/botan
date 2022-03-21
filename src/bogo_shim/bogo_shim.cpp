@@ -180,6 +180,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Simulating cert verify callback failure", ":CERT_CB_ERROR:" },
          { "Simulating failure from OCSP response callback", ":OCSP_CB_ERROR:" },
          { "TLS plaintext record is larger than allowed maximum", ":DATA_LENGTH_TOO_LONG:" },
+         { "Received an encrypted record that exceeds maximum plaintext size", ":DATA_LENGTH_TOO_LONG:" },
          { "TLS record type had unexpected value", ":UNEXPECTED_RECORD:" },
          { "TLS record version had unexpected value", ":WRONG_VERSION_NUMBER:" },
          { "TLS signature extension did not allow for RSA/SHA-256 signature", ":WRONG_SIGNATURE_TYPE:", },

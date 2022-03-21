@@ -276,6 +276,12 @@ Record_Layer::ReadResult<Record> Record_Layer::next_record(Cipher_State* cipher_
          throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "premature Application Data received");
          }
 
+      if(record.fragment.size() < cipher_state->minimum_decryption_input_length())
+         { throw TLS_Exception(Alert::BAD_RECORD_MAC, "incomplete record mac received"); }
+
+      if(cipher_state->decrypt_output_length(record.fragment.size()) > MAX_PLAINTEXT_SIZE + 1 /* type tag */)
+         { throw TLS_Exception(Alert::RECORD_OVERFLOW, "Received an encrypted record that exceeds maximum plaintext size"); }
+
       record.seq_no = cipher_state->decrypt_record_fragment(plaintext_header.serialized, record.fragment);
 
       // hydrate the actual content type from TLSInnerPlaintext

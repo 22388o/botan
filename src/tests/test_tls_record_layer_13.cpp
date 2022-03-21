@@ -231,19 +231,6 @@ std::vector<Test::Result> basic_sanitization_parse_records(TLS::Connection_Side 
             });
          }),
 
-      CHECK("tries to decrypt a (protected) application data record "
-            "(doesn't exit early as overflow alert)", [&](Test::Result& result)
-         {
-         std::vector<uint8_t> full_record{'\x17', '\x03', '\x03', '\x41', '\x00'};
-         full_record.resize(TLS::MAX_CIPHERTEXT_SIZE_TLS13 + TLS::TLS_HEADER_SIZE);
-
-         auto cs = rfc8448_rtt1_handshake_traffic();
-         result.test_throws<Botan::Invalid_Authentication_Tag>("broken record detected", [&]
-            {
-            parse_records(full_record, cs.get());
-            });
-         }),
-
       CHECK("received the maximum size of an unprotected record", [&](auto& result)
          {
          std::vector<uint8_t> full_record{'\x16', '\x03', '\x03', '\x40', '\x00'};
@@ -259,6 +246,24 @@ std::vector<Test::Result> basic_sanitization_parse_records(TLS::Connection_Side 
          result.test_throws("record too big", "Received an encrypted record that exceeds maximum size", [&]
             {
             parse_records(huge_record);
+            });
+         }),
+
+      CHECK("decryption would result in too large plaintext", [&](auto& result)
+         {
+         // In this case the ciphertext is within the allowed bounds, but the
+         // decrypted plaintext would be too large.
+         std::vector<uint8_t> huge_record{'\x17', '\x03', '\x03', '\x40', '\x12'};
+         huge_record.resize(TLS::MAX_PLAINTEXT_SIZE
+                            + TLS::TLS_HEADER_SIZE
+                            + 16 /* AES-GCM tag */
+                            + 1 /* encrypted type */
+                            + 1 /* illegal */);
+
+         auto cs = rfc8448_rtt1_handshake_traffic();
+         result.test_throws("record too big", "Received an encrypted record that exceeds maximum plaintext size", [&]
+            {
+            parse_records(huge_record, cs.get());
             });
          }),
 
@@ -536,7 +541,7 @@ read_encrypted_records()
          {
          const auto short_record = Botan::hex_decode("17 03 03 00 08 de ad be ef ba ad f0 0d");
 
-         result.test_throws<Botan::Invalid_Authentication_Tag>("broken record detected", [&]
+         result.test_throws<Botan::TLS::TLS_Exception>("too short to decrypt", [&]
             {
             auto cs = rfc8448_rtt1_handshake_traffic();
             auto rl = parse_records(short_record);
@@ -652,7 +657,7 @@ std::vector<Test::Result> write_encrypted_records()
          {
          std::vector<uint8_t> big_data(TLS::MAX_PLAINTEXT_SIZE + TLS::MAX_PLAINTEXT_SIZE / 2);
          auto ct = record_layer_client(true).prepare_records(TLS::Record_Type::APPLICATION_DATA,
-               big_data, cs.get());
+                   big_data, cs.get());
          result.require("encryption added some MAC and record headers",
                         ct.size() > big_data.size() + Botan::TLS::TLS_HEADER_SIZE * 2);
 
