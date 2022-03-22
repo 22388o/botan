@@ -544,6 +544,11 @@ Client_Hello_13::Client_Hello_13(const Policy& policy,
       m_extensions.add(new Record_Size_Limit(policy.record_size_limit().value()));
       }
 
+  if(!next_protocols.empty())
+     {
+     m_extensions.add(new Application_Layer_Protocol_Notification(next_protocols));
+     }
+
    // TODO: This is work in progress and currently just a "best guess"
    if(policy.allow_tls12())
       {
