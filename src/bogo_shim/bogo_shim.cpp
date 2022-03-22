@@ -122,6 +122,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Inconsistent length in certificate request", ":DECODE_ERROR:" },
          { "Inconsistent values in fragmented DTLS handshake header", ":FRAGMENT_MISMATCH:" },
          { "Invalid CertificateRequest: Length field outside parameters", ":DECODE_ERROR:" },
+         { "Invalid ServerHello: Length field outside parameters", ":DECODE_ERROR:" },
          { "Invalid CertificateVerify: Extra bytes at end of message", ":DECODE_ERROR:" },
          { "Invalid Certificate_Status: invalid length field", ":DECODE_ERROR:" },
          { "Invalid ChangeCipherSpec", ":BAD_CHANGE_CIPHER_SPEC:" },
