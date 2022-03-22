@@ -315,8 +315,6 @@ Protocol_Version select_version(const Botan::TLS::Policy& policy,
    const bool is_datagram = client_offer.is_datagram_protocol();
    const bool initial_handshake = (active_version.valid() == false);
 
-   const Protocol_Version latest_supported = policy.latest_supported_version(is_datagram);
-
    if(!supported_versions.empty())
       {
       if(is_datagram)
@@ -332,9 +330,6 @@ Protocol_Version select_version(const Botan::TLS::Policy& policy,
          throw TLS_Exception(Alert::PROTOCOL_VERSION, "No shared TLS version");
          }
       }
-
-   const bool client_offer_acceptable =
-      client_offer.known_version() && policy.acceptable_protocol_version(client_offer);
 
    if(!initial_handshake)
       {
@@ -358,26 +353,21 @@ Protocol_Version select_version(const Botan::TLS::Policy& policy,
          return active_version;
          }
       }
-   else if(client_offer_acceptable)
+
+   if(is_datagram)
       {
-      return client_offer;
-      }
-   else if(!client_offer.known_version() || client_offer > latest_supported)
-      {
-      /*
-      The client offered some version newer than the latest we
-      support.  Offer them the best we know.
-      */
-      return latest_supported;
+      if(policy.allow_dtls12() && client_offer >= Protocol_Version::DTLS_V12)
+         return Protocol_Version::DTLS_V12;
       }
    else
       {
-      throw TLS_Exception(Alert::PROTOCOL_VERSION,
-                           "Client version " + client_offer.to_string() +
-                           " is unacceptable by policy");
+      if(policy.allow_tls12() && client_offer >= Protocol_Version::TLS_V12)
+         return Protocol_Version::TLS_V12;
       }
-   }
 
+   throw TLS_Exception(Alert::PROTOCOL_VERSION,
+         "Client version " + client_offer.to_string() + " is unacceptable by policy");
+   }
 }
 
 /*

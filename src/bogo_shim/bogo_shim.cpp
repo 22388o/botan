@@ -107,9 +107,8 @@ std::string map_to_bogo_error(const std::string& e)
          { "Client sent plaintext HTTP proxy CONNECT request instead of TLS handshake", ":HTTPS_PROXY_REQUEST:" },
          { "Client sent plaintext HTTP request instead of TLS handshake", ":HTTP_REQUEST:" },
          { "Client signalled fallback SCSV, possible attack", ":INAPPROPRIATE_FALLBACK:" },
-         { "Client version DTLS v1.0 is unacceptable by policy", ":UNSUPPORTED_PROTOCOL:" },
-         { "Client version TLS v1.0 is unacceptable by policy", ":UNSUPPORTED_PROTOCOL:" },
          { "Client version TLS v1.1 is unacceptable by policy", ":UNSUPPORTED_PROTOCOL:" },
+         { "No shared TLS version based on supported versions extension", ":UNSUPPORTED_PROTOCOL:" },
          { "Client: No certificates sent by server", ":DECODE_ERROR:" },
          { "Counterparty sent inconsistent key and sig types", ":WRONG_SIGNATURE_TYPE:" },
          { "Downgrade attack detected", ":TLS13_DOWNGRADE:" },
@@ -1097,7 +1096,14 @@ std::vector<uint16_t> Shim_Policy::ciphersuite_list(Botan::TLS::Protocol_Version
             suite.kex_method() == Botan::TLS::Kex_Algo::UNDEFINED &&
             suite.auth_method() == Botan::TLS::Auth_Method::UNDEFINED;
 
-         if((version == Botan::TLS::Protocol_Version::TLS_V13) != is_tls13_suite)
+         const bool is_client = !m_args.flag_set("server");
+
+         // client should only offer suites appropriate to version
+         if(is_client && (version == Botan::TLS::Protocol_Version::TLS_V13) != is_tls13_suite)
+            continue;
+
+         // tls 1.3 server is nyi
+         if (!is_client && is_tls13_suite)
             continue;
 
          // Can we use it?

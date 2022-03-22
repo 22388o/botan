@@ -157,5 +157,5 @@
         "SendUnencryptedFinished-DTLS": "Need to check for buffered messages when CCS (bug)",
 
         "RSAKeyUsage-*-UnenforcedTLS*": "We always enforce key usage"
-}
+  }
 }
