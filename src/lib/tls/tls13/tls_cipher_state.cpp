@@ -436,7 +436,7 @@ void Cipher_State::update_write_keys()
    m_write_application_traffic_secret =
       hkdf_expand_label(m_write_application_traffic_secret, "traffic upd", {}, m_hash->output_length());
 
-   derive_read_traffic_key(m_write_application_traffic_secret);
+   derive_write_traffic_key(m_write_application_traffic_secret);
    }
 
 void Cipher_State::clear_read_keys()

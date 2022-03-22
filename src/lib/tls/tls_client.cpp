@@ -104,6 +104,11 @@ void Client::renegotiate(bool force_full_renegotiation)
    m_impl->renegotiate(force_full_renegotiation);
    }
 
+void Client::update_traffic_keys(bool request_peer_update)
+   {
+   m_impl->update_traffic_keys(request_peer_update);
+   }
+
 bool Client::secure_renegotiation_supported() const
    {
    return m_impl->secure_renegotiation_supported();

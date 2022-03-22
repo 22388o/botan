@@ -615,7 +615,7 @@ std::unique_ptr<Shim_Arguments> parse_options(char* argv[])
       "install-ddos-callback",
       "is-handshaker-supported",
       //"jdk11-workaround",
-      //"key-update",
+      "key-update",
       "no-op-extra-handshake",
       "no-rsa-pss-rsae-certs",
       "no-ticket",
@@ -1537,6 +1537,12 @@ class Shim_Callbacks final : public Botan::TLS::Callbacks
                }
 
             m_channel->close();
+            }
+
+         if(m_args.flag_set("key-update"))
+            {
+            shim_log("Updating traffic keys without asking for reciprocation");
+            m_channel->update_traffic_keys(false /* don't request reciprocal update */);
             }
          }
 

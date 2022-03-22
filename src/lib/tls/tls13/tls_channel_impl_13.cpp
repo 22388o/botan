@@ -262,6 +262,14 @@ SymmetricKey Channel_Impl_13::key_material_export(const std::string& label,
    return m_cipher_state->export_key(label, context, length);
    }
 
+void Channel_Impl_13::update_traffic_keys(bool request_peer_update)
+   {
+   BOTAN_STATE_CHECK(!is_downgrading());
+   BOTAN_STATE_CHECK(handshake_finished());
+   send_post_handshake_message(Key_Update(request_peer_update));
+   m_cipher_state->update_write_keys();
+   }
+
 void Channel_Impl_13::send_record(uint8_t record_type, const std::vector<uint8_t>& record)
    {
    BOTAN_STATE_CHECK(!is_downgrading());
