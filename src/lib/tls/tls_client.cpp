@@ -36,16 +36,27 @@ Client::Client(Callbacks& callbacks,
                const std::vector<std::string>& next_protocols,
                size_t io_buf_sz)
    {
+   Protocol_Version effective_version = offer_version;
+
 #if defined(BOTAN_HAS_TLS_13)
-   if(offer_version == Protocol_Version::TLS_V13)
+   // downgrade to TLS 1.2 directly if we have a legacy session to resume
+   if(effective_version == Protocol_Version::TLS_V13)
+      {
+      Session session;
+      const bool found = session_manager.load_from_server_info(info, session);
+      if(found && session.version().is_pre_tls_13())
+         effective_version = session.version();
+      }
+
+   if(effective_version == Protocol_Version::TLS_V13)
       m_impl = std::make_unique<Client_Impl_13>(
                   callbacks, session_manager, creds, policy,
-                  rng, info, offer_version, next_protocols, io_buf_sz);
+                  rng, info, effective_version, next_protocols, io_buf_sz);
    else
 #endif
       m_impl = std::make_unique<Client_Impl_12>(
                   callbacks, session_manager, creds, policy,
-                  rng, info, offer_version, next_protocols, io_buf_sz);
+                  rng, info, effective_version, next_protocols, io_buf_sz);
    }
 
 Client::~Client() = default;

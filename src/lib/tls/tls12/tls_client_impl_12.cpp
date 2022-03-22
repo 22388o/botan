@@ -72,7 +72,7 @@ Client_Impl_12::Client_Impl_12(Callbacks& callbacks,
    m_creds(creds),
    m_info(info)
    {
-   BOTAN_ASSERT_NOMSG(offer_version.is_pre_tls_13());
+   BOTAN_ASSERT(offer_version.is_pre_tls_13(), "Version is supported by this implementation");
 
    Handshake_State& state = create_handshake_state(offer_version);
    send_client_hello(state, false, offer_version, next_protocols);
