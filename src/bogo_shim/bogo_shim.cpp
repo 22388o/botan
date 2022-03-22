@@ -120,6 +120,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Have data remaining in buffer after Finished", ":EXCESS_HANDSHAKE_DATA:" },
          { "Have data remaining in buffer after ServerHelloDone", ":EXCESS_HANDSHAKE_DATA:" },
          { "Inconsistent length in certificate request", ":DECODE_ERROR:" },
+         { "unexpected key_update parameter", ":DECODE_ERROR:" },
          { "Inconsistent values in fragmented DTLS handshake header", ":FRAGMENT_MISMATCH:" },
          { "Invalid CertificateRequest: Length field outside parameters", ":DECODE_ERROR:" },
          { "Invalid ServerHello: Length field outside parameters", ":DECODE_ERROR:" },
