@@ -48,7 +48,8 @@ Channel_Impl_13::Channel_Impl_13(Callbacks& callbacks,
    m_record_layer(m_side),
    m_handshake_layer(m_side),
    m_can_read(true),
-   m_can_write(true)
+   m_can_write(true),
+   m_opportunistic_key_update(false)
    {
    }
 
@@ -216,6 +217,20 @@ void Channel_Impl_13::send(const uint8_t buf[], size_t buf_size)
    {
    if(!is_active())
       { throw Invalid_State("Data cannot be sent on inactive TLS connection"); }
+
+   // RFC 8446 4.6.3
+   //    If the request_update field [of a received KeyUpdate] is set to
+   //    "update_requested", then the receiver MUST send a KeyUpdate of its own
+   //    with request_update set to "update_not_requested" prior to sending its
+   //    next Application Data record.
+   //    This mechanism allows either side to force an update to the entire
+   //    connection, but causes an implementation which receives multiple
+   //    KeyUpdates while it is silent to respond with a single update.
+   if(m_opportunistic_key_update)
+      {
+      update_traffic_keys(false /* update_requested */);
+      m_opportunistic_key_update = false;
+      }
 
    send_record(Record_Type::APPLICATION_DATA, {buf, buf+buf_size});
    }

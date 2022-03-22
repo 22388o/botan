@@ -379,8 +379,11 @@ void TLS::Client_Impl_13::handle(const Key_Update& key_update)
    //    record.
    if(key_update.expects_reciprocation())
       {
-      send_post_handshake_message(Key_Update(false /* update not requested */));
-      m_cipher_state->update_write_keys();
+      // RFC 8446 4.6.3
+      //    This mechanism allows either side to force an update to the
+      //    multiple KeyUpdates while it is silent to respond with a single
+      //    update.
+      opportunistically_update_traffic_keys();
       }
    }
 

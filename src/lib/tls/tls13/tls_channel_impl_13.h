@@ -137,6 +137,13 @@ class Channel_Impl_13 : public Channel_Impl
        */
       virtual bool prepend_ccs() { return false; }
 
+      /**
+       * Schedule a traffic key update to opportunistically happen before the
+       * channel sends application data the next time. Such a key update will
+       * never request a reciprocal key update from the peer.
+       */
+      void opportunistically_update_traffic_keys() { m_opportunistic_key_update = true; }
+
       void send_handshake_message(const Handshake_Message_13_Ref message);
       void send_post_handshake_message(const Post_Handshake_Message_13 message);
       void send_dummy_change_cipher_spec();
@@ -188,6 +195,8 @@ class Channel_Impl_13 : public Channel_Impl
 
       bool m_can_read;
       bool m_can_write;
+
+      bool m_opportunistic_key_update;
    };
 }
 
