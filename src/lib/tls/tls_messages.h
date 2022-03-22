@@ -145,16 +145,12 @@ class BOTAN_UNSTABLE_API Client_Hello : public Handshake_Message
 
    protected:
       Client_Hello(const Policy& policy,
-                   Callbacks& cb,
                    RandomNumberGenerator& rng,
-                   const Client_Hello::Settings& client_settings,
-                   const std::vector<std::string>& next_protocols);
+                   const Client_Hello::Settings& client_settings);
 
       Client_Hello(const Policy& policy,
-                   Callbacks& cb,
                    RandomNumberGenerator& rng,
-                   const Session& resumed_session,
-                   const std::vector<std::string>& next_protocols);
+                   const Session& resumed_session);
 
       explicit Client_Hello(const std::vector<uint8_t>& buf);
 
