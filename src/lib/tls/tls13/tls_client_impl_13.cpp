@@ -43,7 +43,6 @@ Client_Impl_13::Client_Impl_13(Callbacks& callbacks,
                              policy,
                              callbacks,
                              rng,
-                             std::vector<uint8_t>(),
                              client_settings,
                              next_protocols)));
 

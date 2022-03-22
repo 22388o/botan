@@ -72,6 +72,8 @@ Client_Impl_12::Client_Impl_12(Callbacks& callbacks,
    m_creds(creds),
    m_info(info)
    {
+   BOTAN_ASSERT_NOMSG(offer_version.is_pre_tls_13());
+
    Handshake_State& state = create_handshake_state(offer_version);
    send_client_hello(state, false, offer_version, next_protocols);
    }
@@ -122,8 +124,11 @@ Client_Impl_12::get_peer_cert_chain(const Handshake_State& state) const
 void Client_Impl_12::initiate_handshake(Handshake_State& state,
                                         bool force_full_renegotiation)
    {
-   BOTAN_UNUSED(state, force_full_renegotiation);
-   // TODO
+   // we don't support TLS < 1.2 anymore and TLS 1.3 should not use this client impl
+   const auto version = state.version().is_datagram_protocol()
+      ? Protocol_Version::DTLS_V12
+      : Protocol_Version::TLS_V12;
+   send_client_hello(state, force_full_renegotiation, version);
    }
 
 void Client_Impl_12::send_client_hello(Handshake_State& state_base,
@@ -234,8 +239,7 @@ void Client_Impl_12::process_handshake_msg(const Handshake_State* active_state,
          if(secure_renegotiation_supported() || policy().allow_insecure_renegotiation())
             {
             state.m_is_reneg = true;
-            send_client_hello(state, true /* force_full_renegotiation */,
-                              policy().latest_supported_version(state.version().is_datagram_protocol()));
+            initiate_handshake(state, true /* force_full_renegotiation */);
             }
          else
             {

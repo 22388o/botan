@@ -58,7 +58,6 @@ std::vector<uint8_t> make_hello_random(RandomNumberGenerator& rng,
 Client_Hello::Client_Hello(const Policy& policy,
                            Callbacks& cb,
                            RandomNumberGenerator& rng,
-                           const std::vector<uint8_t>& reneg_info,
                            const Client_Hello::Settings& client_settings,
                            const std::vector<std::string>& next_protocols) :
    m_legacy_version(client_settings.protocol_version()),
@@ -66,7 +65,7 @@ Client_Hello::Client_Hello(const Policy& policy,
    m_suites(policy.ciphersuite_list(m_legacy_version)),
    m_comp_methods(1)
    {
-   BOTAN_UNUSED(cb, reneg_info, next_protocols);
+   BOTAN_UNUSED(cb, next_protocols);
 
    if(!policy.acceptable_protocol_version(m_legacy_version))
       throw Internal_Error("Offering " + m_legacy_version.to_string() +
@@ -90,7 +89,6 @@ Client_Hello::Client_Hello(const Policy& policy,
 Client_Hello::Client_Hello(const Policy& policy,
                            Callbacks& cb,
                            RandomNumberGenerator& rng,
-                           const std::vector<uint8_t>& reneg_info,
                            const Session& session,
                            const std::vector<std::string>& next_protocols) :
    m_legacy_version(session.version()),
@@ -99,7 +97,7 @@ Client_Hello::Client_Hello(const Policy& policy,
    m_suites(policy.ciphersuite_list(m_legacy_version)),
    m_comp_methods(1)
    {
-   BOTAN_UNUSED(cb, reneg_info, next_protocols);
+   BOTAN_UNUSED(cb, next_protocols);
 
    if(!policy.acceptable_protocol_version(m_legacy_version))
       throw Internal_Error("Offering " + m_legacy_version.to_string() +
@@ -414,7 +412,7 @@ Client_Hello_12::Client_Hello_12(Handshake_IO& io,
                                  const std::vector<uint8_t>& reneg_info,
                                  const Client_Hello::Settings& client_settings,
                                  const std::vector<std::string>& next_protocols) :
-   Client_Hello(policy, cb, rng, reneg_info, client_settings, next_protocols)
+   Client_Hello(policy, cb, rng, client_settings, next_protocols)
    {
    m_extensions.add(new Session_Ticket());
 
@@ -464,7 +462,7 @@ Client_Hello_12::Client_Hello_12(Handshake_IO& io,
                                  const std::vector<uint8_t>& reneg_info,
                                  const Session& session,
                                  const std::vector<std::string>& next_protocols) :
-   Client_Hello(policy, cb, rng, reneg_info, session, next_protocols)
+   Client_Hello(policy, cb, rng, session, next_protocols)
    {
    if(!value_exists(m_suites, session.ciphersuite_code()))
       { m_suites.push_back(session.ciphersuite_code()); }
@@ -506,10 +504,9 @@ Client_Hello_12::Client_Hello_12(Handshake_IO& io,
 Client_Hello_13::Client_Hello_13(const Policy& policy,
                                  Callbacks& cb,
                                  RandomNumberGenerator& rng,
-                                 const std::vector<uint8_t>& reneg_info,
                                  const Client_Hello::Settings& client_settings,
                                  const std::vector<std::string>& next_protocols) :
-   Client_Hello(policy, cb, rng, reneg_info, client_settings, next_protocols)
+   Client_Hello(policy, cb, rng, client_settings, next_protocols)
    {
    // Always use TLS 1.2 as a legacy version
    m_legacy_version = Protocol_Version::TLS_V12;
