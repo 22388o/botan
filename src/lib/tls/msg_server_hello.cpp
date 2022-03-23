@@ -496,7 +496,7 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
    //    legacy_compression_method:  A single byte which MUST have the value 0.
    if(compression_method() != 0x00)
       {
-      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "compression is not supported in TLS 1.3");
+      throw TLS_Exception(Alert::DECODE_ERROR, "compression is not supported in TLS 1.3");
       }
 
    const auto& exts = extensions();
