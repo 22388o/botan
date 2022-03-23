@@ -186,6 +186,16 @@ void Client_Impl_13::handle(const Server_Hello_12& server_hello_msg)
       throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol version was not offered");
       }
 
+   if(policy().tls_13_middlebox_compatibility_mode() &&
+      m_handshake_state.client_hello().session_id() == server_hello_msg.session_id())
+      {
+      // In compatibility mode, the server will reflect the session ID we sent in the client hello.
+      // However, a TLS 1.2 server that wants to downgrade cannot have found the random session ID
+      // we sent. Therefore, we have to consider this as an attack.
+      // (Thanks BoGo test EchoTLS13CompatibilitySessionID!)
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Unexpected session ID during downgrade");
+      }
+
    BOTAN_ASSERT_NOMSG(expects_downgrade());
 
    // After this, no further messages are expected here because this instance will be replaced

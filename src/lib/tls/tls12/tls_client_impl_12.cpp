@@ -367,6 +367,7 @@ void Client_Impl_12::process_handshake_msg(const Handshake_State* active_state,
       if(server_returned_same_session_id)
          {
          // successful resumption
+         BOTAN_ASSERT_NOMSG(state.resumed_session);
 
          /*
          * In this case, we offered the version used in the original
