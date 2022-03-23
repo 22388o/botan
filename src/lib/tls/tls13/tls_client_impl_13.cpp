@@ -125,7 +125,7 @@ void validate_server_hello_ish(const Client_Hello_13& ch, const Server_Hello_13&
    //    with an "illegal_parameter" alert.
    if(!ch.offered_suite(sh.ciphersuite()))
       {
-      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Ciphersuite was not offered");
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Server replied with ciphersuite we didn't send");
       }
 
    // RFC 8446 4.2.1
@@ -135,7 +135,7 @@ void validate_server_hello_ish(const Client_Hello_13& ch, const Server_Hello_13&
    BOTAN_ASSERT_NOMSG(ch.extensions().has<Supported_Versions>());
    if(!ch.extensions().get<Supported_Versions>()->supports(sh.selected_version()))
       {
-      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol_Version was not offered");
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol version was not offered");
       }
 
    // RFC 8446 4.1.4.
@@ -183,7 +183,7 @@ void Client_Impl_13::handle(const Server_Hello_12& server_hello_msg)
    BOTAN_ASSERT_NOMSG(client_hello_exts.has<Supported_Versions>());
    if(!client_hello_exts.get<Supported_Versions>()->supports(server_hello_msg.selected_version()))
       {
-      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol_Version was not offered");
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol version was not offered");
       }
 
    BOTAN_ASSERT_NOMSG(expects_downgrade());

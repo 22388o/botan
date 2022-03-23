@@ -24,6 +24,7 @@
 #include <botan/internal/parsing.h>
 #include <botan/mem_ops.h>
 #include <botan/internal/os_utils.h>
+#include <botan/internal/stl_util.h>
 
 #include <iostream>
 #include <vector>
@@ -84,6 +85,9 @@ std::string map_to_bogo_error(const std::string& e)
          { "Bad length in hello verify request", ":DECODE_ERROR:" },
          { "Bad lengths in DTLS header", ":BAD_HANDSHAKE_RECORD:" },
          { "Bad signature on server key exchange", ":BAD_SIGNATURE:" },
+         { "Server certificate verification failed", ":BAD_SIGNATURE:" },
+         { "compression is not supported in TLS 1.3", ":DECODE_ERROR:" },
+         { "Cookie length must be at least 1 byte", ":DECODE_ERROR:" },
          { "Bad size (1) for TLS alert message", ":BAD_ALERT:" },
          { "Bad size (4) for TLS alert message", ":BAD_ALERT:" },
          { "CERTIFICATE decoding failed with PEM: No PEM header found", ":CANNOT_PARSE_LEAF_CERT:" },
@@ -101,6 +105,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Client offered SSLv3 which is not supported", ":UNSUPPORTED_PROTOCOL:" },
          { "Client offered TLS version with major version under 3", ":UNSUPPORTED_PROTOCOL:" },
          { "Expected server hello of (D)TLS 1.2 or lower", ":UNSUPPORTED_PROTOCOL:" },
+         { "Protocol version was not offered", ":UNSUPPORTED_PROTOCOL:" },
          { "Client policy prohibits insecure renegotiation", ":RENEGOTIATION_MISMATCH:" },
          { "Client policy prohibits renegotiation", ":NO_RENEGOTIATION:" },
          { "Client resumed extended ms session without sending extension", ":RESUMED_EMS_SESSION_WITHOUT_EMS_EXTENSION:" },
@@ -119,6 +124,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Have data remaining in buffer after ClientHello", ":EXCESS_HANDSHAKE_DATA:" },
          { "Have data remaining in buffer after Finished", ":EXCESS_HANDSHAKE_DATA:" },
          { "Have data remaining in buffer after ServerHelloDone", ":EXCESS_HANDSHAKE_DATA:" },
+         { "Unexpected additional handshake message data found in record", ":EXCESS_HANDSHAKE_DATA:" },
          { "Inconsistent length in certificate request", ":DECODE_ERROR:" },
          { "unexpected key_update parameter", ":DECODE_ERROR:" },
          { "Inconsistent values in fragmented DTLS handshake header", ":FRAGMENT_MISMATCH:" },
@@ -155,6 +161,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Server changed version after renegotiation", ":WRONG_SSL_VERSION:" },
          { "Server policy prohibits renegotiation", ":NO_RENEGOTIATION:" },
          { "Server replied using a ciphersuite not allowed in version it offered", ":WRONG_CIPHER_RETURNED:" },
+         { "server changed its chosen ciphersuite", ":WRONG_CIPHER_RETURNED:" },
          { "Server replied with DTLS-SRTP alg we did not send", ":BAD_SRTP_PROTECTION_PROFILE_LIST:" },
          { "Server replied with ciphersuite we didn't send", ":WRONG_CIPHER_RETURNED:" },
          { "Server replied with an invalid version", ":UNSUPPORTED_PROTOCOL:" },  // bogus version from "ServerBogusVersion"
@@ -171,7 +178,17 @@ std::string map_to_bogo_error(const std::string& e)
          { "Server resumed session but added extended master secret", ":RESUMED_NON_EMS_SESSION_WITH_EMS_EXTENSION:" },
          { "Server resumed session but with wrong version", ":OLD_SESSION_VERSION_NOT_RETURNED:" },
          { "Server sent ECC curve prohibited by policy", ":WRONG_CURVE:" },
+         { "group was not advertised as supported", ":WRONG_CURVE:" },
+         { "group was already offered", ":WRONG_CURVE:" },
+         { "Server selected an unexpected key exchange group.", ":WRONG_CURVE:" },
+         { "TLS 1.3 Server Hello selected a different version", ":SECOND_SERVERHELLO_VERSION_MISMATCH:" },
+         { "Version downgrade received after Hello Retry", ":SECOND_SERVERHELLO_VERSION_MISMATCH:" },
+         { "protected change cipher spec received", ":UNEXPECTED_RECORD:" },
          { "Server sent an unsupported extension", ":UNEXPECTED_EXTENSION:" },
+         { "Unexpected extension received", ":UNEXPECTED_EXTENSION:" },
+         { "extension was not offered", ":UNEXPECTED_EXTENSION:" },
+         { "server hello must contain key exchange information", ":MISSING_KEY_SHARE:"},
+         { "Peer sent duplicated extensions", ":DUPLICATE_EXTENSION:" },
          { "Server sent bad values for secure renegotiation", ":RENEGOTIATION_MISMATCH:" },
          { "Server version DTLS v1.0 is unacceptable by policy", ":UNSUPPORTED_PROTOCOL:" },
          { "Server version TLS v1.0 is unacceptable by policy", ":UNSUPPORTED_PROTOCOL:" },
@@ -205,7 +222,9 @@ std::string map_to_bogo_error(const std::string& e)
          { "Unexpected state transition in handshake got a server_hello_done expected server_key_exchange seen server_hello+certificate", ":UNEXPECTED_MESSAGE:" },
          { "Unexpected state transition in handshake got a server_key_exchange expected certificate seen server_hello", ":UNEXPECTED_MESSAGE:" },
          { "Unexpected state transition in handshake got a server_key_exchange expected certificate_request|server_hello_done seen server_hello+certificate", ":UNEXPECTED_MESSAGE:" },
+         { "Unexpected state transition in handshake got a hello_retry_request expected server_hello", ":UNEXPECTED_MESSAGE:" },
          { "Unexpected state transition in handshake got a server_key_exchange not expecting messages", ":BAD_HELLO_REQUEST:" },
+         { "Unexpected state transition in handshake got a finished expected certificate_verify seen server_hello+certificate+encrypted_extensions", ":BAD_HELLO_REQUEST:" },
          { "Unknown TLS handshake message type 43", ":UNEXPECTED_MESSAGE:" },
          { "Unknown TLS handshake message type 44", ":UNEXPECTED_MESSAGE:" },
          { "Unknown TLS handshake message type 45", ":UNEXPECTED_MESSAGE:" },
@@ -1056,6 +1075,24 @@ class Shim_Policy final : public Botan::TLS::Policy
       size_t maximum_certificate_chain_size() const override
          {
          return m_args.get_int_opt_or_else("max-cert-list", 0);
+         }
+
+      bool tls_13_middlebox_compatibility_mode() const override
+         {
+         // These tests expect the client to send an alert in return of a malformed TLS 1.2 server hello.
+         // However, our TLS 1.3 implementation produces an alert without downgrading to TLS 1.2 first.
+         // In compatibility mode this prepends a CCS, which BoGo does not expect to read.
+         const std::vector<std::string> alert_after_server_hello = {
+                 "DuplicateExtensionClient-TLS-TLS12",
+                 "WrongMessageType-ServerHello-TLS",
+                 "SendServerHelloAsHelloRetryRequest",
+                 "TrailingMessageData-ServerHello-TLS",
+                 "NoSSL3-Client-Unsolicited",
+                 "Client-TooLongSessionID"};
+         if(Botan::value_exists(alert_after_server_hello, m_args.test_name()))
+            return false;
+
+         return true;
          }
 
    private:
