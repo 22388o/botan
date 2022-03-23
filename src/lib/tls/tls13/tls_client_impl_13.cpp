@@ -248,6 +248,15 @@ void Client_Impl_13::handle(const Server_Hello_13& sh)
    auto cipher = Ciphersuite::by_id(sh.ciphersuite());
    BOTAN_ASSERT_NOMSG(cipher.has_value());  // should work, since we offered this suite
 
+   // RFC 8446 Appendix B.4
+   //    Although TLS 1.3 uses the same cipher suite space as previous versions
+   //    of TLS [...] cipher suites for TLS 1.2 and lower cannot be used with
+   //    TLS 1.3.
+   if(!cipher->usable_in_version(Protocol_Version::TLS_V13))
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Server replied using a ciphersuite not allowed in version it offered");
+      }
+
    if(!sh.extensions().has<Key_Share>())
       {
       throw Not_Implemented("PSK mode (without key agreement) is NYI");
