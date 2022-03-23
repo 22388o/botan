@@ -115,6 +115,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Client version TLS v1.1 is unacceptable by policy", ":UNSUPPORTED_PROTOCOL:" },
          { "No shared TLS version based on supported versions extension", ":UNSUPPORTED_PROTOCOL:" },
          { "Client: No certificates sent by server", ":DECODE_ERROR:" },
+         { "No certificates sent by server", ":PEER_DID_NOT_RETURN_A_CERTIFICATE:" },
          { "Counterparty sent inconsistent key and sig types", ":WRONG_SIGNATURE_TYPE:" },
          { "Downgrade attack detected", ":TLS13_DOWNGRADE:" },
          { "Empty ALPN protocol not allowed", ":PARSE_TLSEXT:" },

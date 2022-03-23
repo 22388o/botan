@@ -132,15 +132,30 @@ Certificate_13::Certificate_13(const std::vector<uint8_t>& buf,
       m_entries.push_back(std::move(entry));
       }
 
-   /* validation of provided certificate public key */
-   auto key = m_entries.front().certificate.load_subject_public_key();
-
-   policy.check_peer_key_acceptable(*key);
-
-   if(!policy.allowed_signature_method(key->algo_name()))
+   // RFC 8446 4.4.2
+   //    The server's certificate_list MUST always be non-empty.  A client
+   //    will send an empty certificate_list if it does not have an
+   //    appropriate certificate to send in response to the server's
+   //    authentication request.
+   if(m_entries.empty())
       {
-      throw TLS_Exception(Alert::HANDSHAKE_FAILURE,
-                          "Rejecting " + key->algo_name() + " signature");
+      if(m_side == SERVER)
+         {
+         throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "No certificates sent by server");
+         }
+      }
+   else
+      {
+      /* validation of provided certificate public key */
+      auto key = m_entries.front().certificate.load_subject_public_key();
+
+      policy.check_peer_key_acceptable(*key);
+
+      if(!policy.allowed_signature_method(key->algo_name()))
+         {
+         throw TLS_Exception(Alert::HANDSHAKE_FAILURE,
+                             "Rejecting " + key->algo_name() + " signature");
+         }
       }
    }
 
