@@ -77,6 +77,12 @@ class BOTAN_TEST_API Record_Layer
                                            const std::vector<uint8_t>& data,
                                            Cipher_State* cipher_state=nullptr);
 
+      /**
+       * Clears any data currently stored in the read buffer. This is typically
+       * used for memory cleanup when the peer sent a CLOSE_NOTIFY alert.
+       */
+      void clear_read_buffer() { zap(m_read_buffer); }
+
    private:
       std::vector<uint8_t> m_read_buffer;
       Connection_Side      m_side;

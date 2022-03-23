@@ -92,6 +92,8 @@
 
         "*EarlyData*": "No TLS 1.3 Early Data, yet",
 
+        "FailCertCallback-Client-TLS13": "No client auth in TLS 1.3, yet",
+
         "KeyUpdate-RequestACK-UnfinishedWrite": "-read-with-unfinished-write currently not supported in the shim",
         "TooManyKeyUpdates": "NYI",
 

@@ -16,17 +16,21 @@
 #include <botan/tls_messages.h>
 
 namespace {
-bool is_closure_alert(const Botan::TLS::Alert& alert)
+bool is_user_canceled_alert(const Botan::TLS::Alert& alert)
    {
-   return alert.type() == Botan::TLS::Alert::CLOSE_NOTIFY
-          || alert.type() == Botan::TLS::Alert::USER_CANCELED;
+   return alert.type() == Botan::TLS::Alert::USER_CANCELED;
+   }
+
+bool is_close_notify_alert(const Botan::TLS::Alert& alert)
+   {
+   return alert.type() == Botan::TLS::Alert::CLOSE_NOTIFY;
    }
 
 bool is_error_alert(const Botan::TLS::Alert& alert)
    {
    // In TLS 1.3 all alerts except for closure alerts are considered error alerts.
    // (RFC 8446 6.)
-   return !is_closure_alert(alert);
+   return !is_close_notify_alert(alert) && !is_user_canceled_alert(alert);
    }
 }
 
@@ -73,6 +77,13 @@ size_t Channel_Impl_13::received_data(const uint8_t input[], size_t input_size)
 
       while(true)
          {
+         // RFC 8446 6.1
+         //    Any data received after a closure alert has been received MUST be ignored.
+         //
+         // ... this data might already be in the record layer's read buffer.
+         if(!m_can_read)
+            { return 0; }
+
          auto result = m_record_layer.next_record(m_cipher_state.get());
 
          if(std::holds_alternative<BytesNeeded>(result))
@@ -251,7 +262,7 @@ void Channel_Impl_13::send_alert(const Alert& alert)
    //    Each party MUST send a "close_notify" alert before closing its write
    //    side of the connection, unless it has already sent some error alert.
    //    This does not have any effect on its read side of the connection.
-   if(is_closure_alert(alert))
+   if(is_close_notify_alert(alert))
       {
       m_can_write = false;
       m_cipher_state->clear_write_keys();
@@ -305,10 +316,16 @@ void Channel_Impl_13::process_alert(const secure_vector<uint8_t>& record)
    {
    Alert alert(record);
 
-   if(is_closure_alert(alert))
+   if(is_close_notify_alert(alert))
       {
       m_can_read = false;
       m_cipher_state->clear_read_keys();
+      m_record_layer.clear_read_buffer();
+      }
+
+   if(is_user_canceled_alert(alert))
+      {
+      // ignore
       }
 
    if(is_error_alert(alert))
