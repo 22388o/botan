@@ -141,6 +141,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Invalid authentication tag: ChaCha20Poly1305 tag check failed", ":DECRYPTION_FAILED_OR_BAD_RECORD_MAC:" },
          { "Invalid authentication tag: GCM tag check failed", ":DECRYPTION_FAILED_OR_BAD_RECORD_MAC:" },
          { "Message authentication failure", ":DECRYPTION_FAILED_OR_BAD_RECORD_MAC:" },
+         { "No content type found in encrypted record", ":DECRYPTION_FAILED_OR_BAD_RECORD_MAC:" },
          { "No shared DTLS version", ":UNSUPPORTED_PROTOCOL:" },
          { "No shared TLS version", ":UNSUPPORTED_PROTOCOL:" },
          { "OS2ECP: Unknown format type 251", ":BAD_ECPOINT:" },

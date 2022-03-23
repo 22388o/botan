@@ -284,8 +284,17 @@ Record_Layer::ReadResult<Record> Record_Layer::next_record(Cipher_State* cipher_
 
       record.seq_no = cipher_state->decrypt_record_fragment(plaintext_header.serialized, record.fragment);
 
+      // Remove record padding (RFC 8446 5.4).
+      const auto end_of_content = std::find_if(record.fragment.crbegin(), record.fragment.crend(), [](auto byte)
+         {
+         return byte != 0x00;
+         });
+
+      if(end_of_content == record.fragment.crend())
+         { throw TLS_Exception(Alert::DECODE_ERROR, "No content type found in encrypted record"); }
+
       // hydrate the actual content type from TLSInnerPlaintext
-      record.type = read_record_type(record.fragment.back());
+      record.type = read_record_type(*end_of_content);
 
       if(record.type == Record_Type::CHANGE_CIPHER_SPEC)
          {
@@ -294,7 +303,9 @@ Record_Layer::ReadResult<Record> Record_Layer::next_record(Cipher_State* cipher_
          //  abort the handshake with an "unexpected_message" alert.
          throw TLS_Exception(Alert::UNEXPECTED_MESSAGE, "protected change cipher spec received");
          }
-      record.fragment.pop_back();
+
+      // erase content type and padding
+      record.fragment.erase((end_of_content+1).base(), record.fragment.cend());
       }
 
    m_initial_record = false;

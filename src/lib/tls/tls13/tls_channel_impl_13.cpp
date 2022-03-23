@@ -323,10 +323,7 @@ void Channel_Impl_13::process_alert(const secure_vector<uint8_t>& record)
       m_record_layer.clear_read_buffer();
       }
 
-   if(is_user_canceled_alert(alert))
-      {
-      // ignore
-      }
+   // user canceled alerts are ignored
 
    if(is_error_alert(alert))
       { shutdown(); }
