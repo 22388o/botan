@@ -123,6 +123,17 @@ void Extensions::deserialize(TLS_Data_Reader& reader,
       }
    }
 
+bool Extensions::contains_other_than(const std::set<Handshake_Extension_Type>& allowed_extensions) const
+   {
+   const auto found = extension_types();
+
+   std::vector<Handshake_Extension_Type> diff;
+   std::set_difference(found.cbegin(), found.end(),
+                       allowed_extensions.cbegin(), allowed_extensions.cend(),
+                       std::back_inserter(diff));
+   return !diff.empty();
+   }
+
 std::unique_ptr<Extension> Extensions::take(Handshake_Extension_Type type)
    {
    const auto i = std::find_if(m_extensions.begin(), m_extensions.end(),

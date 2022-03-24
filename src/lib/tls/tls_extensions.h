@@ -727,6 +727,11 @@ class BOTAN_UNSTABLE_API Extensions final
                        const Handshake_Type message_type);
 
       /**
+       * @returns true if this contains any extensions that are not contained in @p allowed_extensions.
+       */
+      bool contains_other_than(const std::set<Handshake_Extension_Type>& allowed_extensions) const;
+
+      /**
        * Take the extension with the given type out of the extensions list.
        * Returns a nullptr if the extension didn't exist.
        */

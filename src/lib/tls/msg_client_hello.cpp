@@ -142,6 +142,11 @@ Client_Hello::Client_Hello(const std::vector<uint8_t>& buf)
 
    m_extensions.deserialize(reader, Connection_Side::CLIENT, type());
 
+   // TODO: Reject oid_filters extension if found (which is the only known extension that
+   //       must not occur in the client hello.
+   // RFC 8446 4.2.5
+   //    [The oid_filters extension] MUST only be sent in the CertificateRequest message.
+
    if(offered_suite(static_cast<uint16_t>(TLS_EMPTY_RENEGOTIATION_INFO_SCSV)))
       {
       if(Renegotiation_Extension* reneg = m_extensions.get<Renegotiation_Extension>())

@@ -247,6 +247,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Unknown post-handshake message received", ":UNEXPECTED_MESSAGE:" },
          { "signature_algorithm_of_scheme: Unknown signature algorithm enum", ":WRONG_SIGNATURE_TYPE:" },
          { "Unexpected session ID during downgrade", ":SERVER_ECHOED_INVALID_SESSION_ID:" },
+         { "Encrypted Extensions contained an extension that is not allowed", ":ERROR_PARSING_EXTENSION:" },
       };
 
    auto err_map_i = err_map.find(e);

@@ -10,8 +10,9 @@
         "NoSharedCipher-TLS13": "Unexpected error",
 
         "PartialFinishedWithServerHelloDone": "Unexpected record vs excess handshake data",
-        "HelloRetryRequest-DuplicateCurve-TLS13": "expects 'invalid_parameter' but we want to stick with 'decode_error'",
-        "HelloRetryRequest-DuplicateCookie-TLS13": "expects 'invalid_parameter' but we want to stick with 'decode_error'"
+        "HelloRetryRequest-DuplicateCurve-TLS13": "expects 'illegal parameter' but we want to stick with 'decode error'",
+        "HelloRetryRequest-DuplicateCookie-TLS13": "expects 'illegal parameter' but we want to stick with 'decode error'",
+        "EncryptedExtensionsWithKeyShare-TLS13": "expects 'unsupported extension' but RFC requires 'illegal parameter'"
     },
 
     "DisabledTests": {

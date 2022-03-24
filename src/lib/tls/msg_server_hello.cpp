@@ -535,20 +535,22 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
    //
    // Note that more detailed validation is done in the specific
    // TLS client implementation.
-   for(const auto& ext : exts.extension_types())
-      {
-      if(ext != TLSEXT_KEY_SHARE &&
-         ext != TLSEXT_PSK_KEY_EXCHANGE_MODES &&
-         ext != TLSEXT_SUPPORTED_VERSIONS &&
+   std::set<Handshake_Extension_Type> allowed = {
+      TLSEXT_KEY_SHARE,
+      TLSEXT_PSK_KEY_EXCHANGE_MODES,
+      TLSEXT_SUPPORTED_VERSIONS,
+   };
 
-         // RFC 8446 4.2.2
-         //     When sending a HelloRetryRequest, the server MAY provide a "cookie"
-         //     extension to the client [...].
-         (m_data->is_hello_retry_request && ext != TLSEXT_COOKIE))
-         {
-         throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
-                             "server hello contained an illegal extension");
-         }
+   // RFC 8446 4.2.2
+   //     When sending a HelloRetryRequest, the server MAY provide a "cookie"
+   //     extension to the client [...].
+   if(m_data->is_hello_retry_request)
+      allowed.insert(TLSEXT_COOKIE);
+
+   if(exts.contains_other_than(allowed))
+      {
+      throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
+                          "server hello contained an illegal extension");
       }
    }
 
