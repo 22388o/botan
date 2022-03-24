@@ -51,6 +51,7 @@
         "TLS13-TestValidTicketAge-Client" : "TLS 1.3 session resumption is NYI",
         "TLS13SessionID-TLS13" : "TLS 1.3 session resumption is NYI",
         "TolerateServerNameAck-TLS-TLS13" : "TLS 1.3 session resumption is NYI",
+        "OCSPStapling-Client-TLS13-*" : "TLS 1.3 session resumption is NYI",
 
         "KeyUpdate-FromServer": "No TLS 1.3 server, yet",
         "FragmentedClientVersion": "No TLS 1.3 server, yet",

@@ -17,6 +17,7 @@
 #include <botan/data_src.h>
 #include <botan/pkcs8.h>
 #include <botan/internal/loadstor.h>
+#include <botan/ocsp.h>
 #include <botan/oids.h>
 #include <botan/chacha_rng.h>
 #include <botan/base64.h>
@@ -1415,6 +1416,19 @@ class Shim_Callbacks final : public Botan::TLS::Callbacks
 
             throw Botan::TLS::TLS_Exception(alert, "Test requires rejecting cert");
             }
+         }
+
+      std::optional<Botan::OCSP::Response> tls_parse_ocsp_response(const std::vector<uint8_t>& raw_response) override
+         {
+         if(m_args.option_used("expect-ocsp-response") &&
+            m_args.get_b64_opt("expect-ocsp-response") != raw_response)
+            {
+            shim_exit_with_error("unexpected OCSP response");
+            }
+
+         // Bogo uses invalid dummy OCSP responses. Don't even bother trying to
+         // decode them.
+         return std::nullopt;
          }
 
       std::string tls_server_choose_app_protocol(const std::vector<std::string>& client_protos) override

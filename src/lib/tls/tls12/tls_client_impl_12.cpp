@@ -621,13 +621,7 @@ void Client_Impl_12::process_handshake_msg(const Handshake_State* active_state,
             std::vector<std::optional<OCSP::Response>> ocsp;
             if(state.server_cert_status() != nullptr)
                {
-               try {
-                  ocsp.push_back(OCSP::Response(state.server_cert_status()->response()));
-               }
-               catch(Decoding_Error&)
-                  {
-                  // ignore it here because it might be our fault
-                  }
+               ocsp.emplace_back(callbacks().tls_parse_ocsp_response(state.server_cert_status()->response()));
                }
 
             callbacks().tls_verify_cert_chain(state.server_certs()->cert_chain(),

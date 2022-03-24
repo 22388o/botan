@@ -51,19 +51,19 @@ void Certificate_13::verify(Callbacks& callbacks,
 
    std::vector<X509_Certificate> certs;
    std::vector<std::optional<OCSP::Response>> ocsp_responses;
-   for (const auto& entry : m_entries)
+   for(const auto& entry : m_entries)
       {
       certs.push_back(entry.certificate);
       if(use_ocsp)
          {
          if(entry.extensions.has<Certificate_Status_Request>())
-            // The response inside the extension can still be emtpy. This will be treated as an error during
-            // construction of the OCSP response.
-            ocsp_responses.push_back(entry.extensions.get<Certificate_Status_Request>()->get_ocsp_response());
+            ocsp_responses.push_back(
+               callbacks.tls_parse_ocsp_response(
+                  entry.extensions.get<Certificate_Status_Request>()->get_ocsp_response()));
          else
             // Note: The make_optional instead of simply nullopt is necessary to work around a GCC <= 10.0 bug
             //       see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
-            ocsp_responses.push_back(std::make_optional<OCSP::Response>());
+            { ocsp_responses.push_back(std::make_optional<OCSP::Response>()); }
          }
       }
 

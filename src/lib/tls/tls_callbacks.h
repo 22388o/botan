@@ -338,6 +338,24 @@ class BOTAN_PUBLIC_API(2,0) Callbacks
        */
        virtual std::string tls_decode_group_param(Group_Params group_param);
 
+      /**
+       * Optional callback: parse a single OCSP Response
+       *
+       * Note: Typically a user of the library would not want to override this
+       *       callback. We provide this callback to be able to support OCSP
+       *       related tests from BoringSSL's BoGo tests that provide unparsable
+       *       responses.
+       *
+       * Default implementation tries to parse the provided raw OCSP response.
+       *
+       * This function should not throw an exception but return a std::nullopt
+       * if the OCSP response cannot be parsed.
+       *
+       * @param raw_response raw OCSP response buffer
+       * @returns the parsed OCSP response or std::nullopt on error
+       */
+       virtual std::optional<OCSP::Response> tls_parse_ocsp_response(const std::vector<uint8_t>& raw_response);
+
        /**
        * Optional callback: return peer network identity
        *
