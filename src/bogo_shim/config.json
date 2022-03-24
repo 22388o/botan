@@ -7,6 +7,7 @@
         "Resume-Client-CipherMismatch": "Unexpected error",
         "InvalidECDHPoint-Server": "Unexpected error",
         "NoSharedCipher": "Unexpected error",
+        "NoSharedCipher-TLS13": "Unexpected error",
 
         "PartialFinishedWithServerHelloDone": "Unexpected record vs excess handshake data"
     },

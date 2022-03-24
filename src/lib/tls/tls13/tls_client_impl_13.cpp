@@ -179,11 +179,15 @@ void Client_Impl_13::handle(const Server_Hello_12& server_hello_msg)
       throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Unexpected extension received");
       }
 
+   // RFC 8446 Appendix D.1
+   //    If the version chosen by the server is not supported by the client
+   //    (or is not acceptable), the client MUST abort the handshake with a
+   //    "protocol_version" alert.
    const auto& client_hello_exts = m_handshake_state.client_hello().extensions();
    BOTAN_ASSERT_NOMSG(client_hello_exts.has<Supported_Versions>());
    if(!client_hello_exts.get<Supported_Versions>()->supports(server_hello_msg.selected_version()))
       {
-      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol version was not offered");
+      throw TLS_Exception(Alert::PROTOCOL_VERSION, "Protocol version was not offered");
       }
 
    if(policy().tls_13_middlebox_compatibility_mode() &&

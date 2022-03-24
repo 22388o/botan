@@ -86,7 +86,12 @@ class BOTAN_TEST_API Record_Layer
    private:
       std::vector<uint8_t> m_read_buffer;
       Connection_Side      m_side;
-      bool                 m_initial_record;
+
+      // those status flags are required for version validation where the initial
+      // record for sending and receiving is handled differently for backward
+      // compatibility reasons.
+      bool m_first_sent_record;
+      bool m_first_rcvd_record;
    };
 
 }

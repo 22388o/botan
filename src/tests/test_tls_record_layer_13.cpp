@@ -288,11 +288,21 @@ std::vector<Test::Result> basic_sanitization_parse_records(TLS::Connection_Side 
 
       CHECK("invalid record version", [&](auto& result)
          {
-         std::vector<uint8_t> invalid_record_version{'\x17', '\x03', '\x02', '\x00', '\x01', '\x42'};
+         std::vector<uint8_t> invalid_record_version{'\x17', '\x13', '\x37', '\x00', '\x01', '\x42'};
          result.test_throws("invalid record version", "Received unexpected record version", [&]
             {
             parse_records(invalid_record_version);
             });
+         }),
+
+      CHECK("initial received record version might be 0x03XX ", [&](auto& result)
+         {
+         auto rl = record_layer_client(true);
+         rl.copy_data({0x16, 0x03, 0x00, 0x00, 0x01, 0x42});
+         result.test_no_throw("0x03 0x00 should be fine for first record", [&] { rl.next_record(); });
+
+         rl.copy_data({0x16, 0x03, 0x00, 0x00, 0x01, 0x42});
+         result.test_throws("0x03 0x00 not okay for any other record", [&] { rl.next_record(); });
          }),
 
       CHECK("malformed change cipher spec", [&](auto& result)
@@ -809,9 +819,9 @@ std::vector<Test::Result> legacy_version_handling()
          result.test_throws("parsing second record", [&] { parse_record(rl, record);});
          }),
 
-      CHECK("server side does not accept other versions", [&](Test::Result& result)
+      CHECK("server side does not accept other versions (after the first record)", [&](Test::Result& result)
          {
-         auto rl = record_layer_server();
+         auto rl = record_layer_server(true);
          result.test_throws("does not accept 0x0300", [&] { parse_record(rl, Botan::hex_decode("16 03 00 00 05 00 00 00 00 00"));});
          result.test_throws("does not accept 0x0302", [&] { parse_record(rl, Botan::hex_decode("16 03 02 00 05 00 00 00 00 00"));});
          result.test_throws("does not accept 0x0304", [&] { parse_record(rl, Botan::hex_decode("16 03 04 00 05 00 00 00 00 00"));});
