@@ -191,7 +191,6 @@ std::string map_to_bogo_error(const std::string& e)
          { "Server sent an unsupported extension", ":UNEXPECTED_EXTENSION:" },
          { "Unexpected extension received", ":UNEXPECTED_EXTENSION:" },
          { "Unsupported extension found in Server Hello or Hello Retry Request", ":UNEXPECTED_EXTENSION:" },
-         { "Unsupported extension found in Encrypted Extensions", ":UNEXPECTED_EXTENSION:" },
          { "server hello must contain key exchange information", ":MISSING_KEY_SHARE:"},
          { "Peer sent duplicated extensions", ":DUPLICATE_EXTENSION:" },
          { "Server sent bad values for secure renegotiation", ":RENEGOTIATION_MISMATCH:" },
@@ -248,6 +247,10 @@ std::string map_to_bogo_error(const std::string& e)
          { "signature_algorithm_of_scheme: Unknown signature algorithm enum", ":WRONG_SIGNATURE_TYPE:" },
          { "Unexpected session ID during downgrade", ":SERVER_ECHOED_INVALID_SESSION_ID:" },
          { "Encrypted Extensions contained an extension that is not allowed", ":ERROR_PARSING_EXTENSION:" },
+         { "Encrypted Extensions contained an extension that was not offered", ":UNEXPECTED_EXTENSION:" },
+         { "Server Hello or Hello Retry Request contained an extension that is not allowed", ":UNEXPECTED_EXTENSION:" },
+         { "Certificate Entry contained an extension that is not allowed",":UNEXPECTED_EXTENSION:" },
+         { "Certificate Entry contained an extension that was not offered",":UNEXPECTED_EXTENSION:" },
       };
 
    auto err_map_i = err_map.find(e);

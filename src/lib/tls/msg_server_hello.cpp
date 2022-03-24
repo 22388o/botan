@@ -530,8 +530,8 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
       }
 
    // RFC 8446 4.1.3
-   //    Other extensions (see Section 4.2) are sent
-   //    separately in the EncryptedExtensions message.
+   //    Other extensions (see Section 4.2) are sent separately in the
+   //    EncryptedExtensions message.
    //
    // Note that more detailed validation is done in the specific
    // TLS client implementation.
@@ -550,7 +550,7 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
    if(exts.contains_other_than(allowed))
       {
       throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
-                          "server hello contained an illegal extension");
+            "Server Hello or Hello Retry Request contained an extension that is not allowed");
       }
    }
 

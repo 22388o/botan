@@ -22,7 +22,7 @@
 
 namespace Botan::TLS {
 
-void Certificate_13::validate_extensions(const Extensions& requested_extensions) const
+void Certificate_13::validate_extensions(const std::set<Handshake_Extension_Type>& requested_extensions) const
    {
    // RFC 8446 4.4.2
    //    Extensions in the Certificate message from the server MUST
@@ -30,9 +30,8 @@ void Certificate_13::validate_extensions(const Extensions& requested_extensions)
    //    the Certificate message from the client MUST correspond to
    //    extensions in the CertificateRequest message from the server.
    for(const auto& entry : m_entries)
-      for(const auto& ext_type : entry.extensions.extension_types())
-         if(!requested_extensions.has(ext_type))
-            { throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Unexpected extension received"); }
+      if(entry.extensions.contains_other_than(requested_extensions))
+         { throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Certificate Entry contained an extension that was not offered"); }
    }
 
 void Certificate_13::verify(Callbacks& callbacks,
@@ -128,6 +127,18 @@ Certificate_13::Certificate_13(const std::vector<uint8_t>& buf,
       const auto exts_buf = reader.get_fixed<uint8_t>(extensions_length + 2);
       TLS_Data_Reader exts_reader("extensions reader", exts_buf);
       entry.extensions.deserialize(exts_reader, m_side, type());
+
+      // RFC 8446 4.4.2
+      //    Valid extensions for server certificates at present include the
+      //    OCSP Status extension [RFC6066] and the SignedCertificateTimestamp
+      //    extension [RFC6962]
+      if(entry.extensions.contains_other_than({
+            TLSEXT_CERT_STATUS_REQUEST,
+            // signed certificate timestamp
+         }))
+         {
+         throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Certificate Entry contained an extension that is not allowed");
+         }
 
       m_entries.push_back(std::move(entry));
       }

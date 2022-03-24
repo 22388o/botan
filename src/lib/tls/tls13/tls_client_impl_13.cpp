@@ -137,18 +137,6 @@ void validate_server_hello_ish(const Client_Hello_13& ch, const Server_Hello_13&
       {
       throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol version was not offered");
       }
-
-   // RFC 8446 4.1.4.
-   //    A HelloRetryRequest MUST NOT contain any
-   //    extensions that were not first offered by the client in its
-   //    ClientHello, with the exception of optionally the "cookie".
-   for(auto ext_type : sh.extensions().extension_types())
-      {
-      if(ext_type != TLSEXT_COOKIE && ch.extensions().extension_types().count(ext_type) == 0)
-         {
-         throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION, "Unsupported extension found in Server Hello or Hello Retry Request");
-         }
-      }
    }
 }
 
@@ -226,6 +214,11 @@ void Client_Impl_13::handle(const Server_Hello_13& sh)
 
    validate_server_hello_ish(ch, sh);
 
+   if(sh.extensions().contains_other_than(ch.extensions().extension_types()))
+      {
+      throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION, "Unsupported extension found in Server Hello");
+      }
+
    if(m_handshake_state.has_hello_retry_request())
       {
       const auto& hrr = m_handshake_state.hello_retry_request();
@@ -293,6 +286,17 @@ void Client_Impl_13::handle(const Hello_Retry_Request& hrr)
 
    validate_server_hello_ish(ch, hrr);
 
+   // RFC 8446 4.1.4.
+   //    A HelloRetryRequest MUST NOT contain any
+   //    extensions that were not first offered by the client in its
+   //    ClientHello, with the exception of optionally the "cookie".
+   auto allowed_exts = ch.extensions().extension_types();
+   allowed_exts.insert(TLSEXT_COOKIE);
+   if(hrr.extensions().contains_other_than(allowed_exts))
+      {
+      throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION, "Unsupported extension found in Hello Retry Request");
+      }
+
    auto cipher = Ciphersuite::by_id(hrr.ciphersuite());
    BOTAN_ASSERT_NOMSG(cipher.has_value());  // should work, since we offered this suite
 
@@ -324,28 +328,6 @@ void Client_Impl_13::handle(const Encrypted_Extensions& encrypted_extensions_msg
       { throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
             "Encrypted Extensions contained an extension that was not offered"); }
 
-   // RFC 8446 4.2
-   //    If an implementation receives an extension which it recognizes and
-   //    which is not specified for the message in which it appears, it MUST
-   //    abort the handshake with an "illegal_parameter" alert.
-   //
-   // Note that we cannot encounter any extensions that we don't recognize here,
-   // since only extensions we previously offered are allowed in EE.
-   const auto allowed_exts = std::set<Handshake_Extension_Type>{
-      Handshake_Extension_Type::TLSEXT_SERVER_NAME_INDICATION,
-      // MAX_FRAGMENT_LENGTH
-      Handshake_Extension_Type::TLSEXT_SUPPORTED_GROUPS,
-      Handshake_Extension_Type::TLSEXT_USE_SRTP,
-      // HEARTBEAT
-      Handshake_Extension_Type::TLSEXT_ALPN,
-      // CLIENT_CERTIFICATE_TYPE
-      // SERVER_CERTIFICATE_TYPE
-      // EARLY_DATA
-   };
-   if(encrypted_extensions_msg.extensions().contains_other_than(allowed_exts))
-      { throw TLS_Exception(Alert::ILLEGAL_PARAMETER,
-            "Encrypted Extensions contained an extension that is not allowed"); }
-
    // Note: As per RFC 6066 3. we can check for an empty SNI extensions to
    // determine if the server used the SNI we sent here.
 
@@ -364,7 +346,7 @@ void Client_Impl_13::handle(const Encrypted_Extensions& encrypted_extensions_msg
 
 void Client_Impl_13::handle(const Certificate_13& certificate_msg)
    {
-   certificate_msg.validate_extensions(m_handshake_state.client_hello().extensions());
+   certificate_msg.validate_extensions(m_handshake_state.client_hello().extensions().extension_types());
    certificate_msg.verify(callbacks(),
                           policy(),
                           credentials_manager(),

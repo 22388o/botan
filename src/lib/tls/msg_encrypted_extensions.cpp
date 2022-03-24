@@ -10,6 +10,7 @@
 #if defined(BOTAN_HAS_TLS_13)
 
 #include <botan/tls_messages.h>
+#include <botan/tls_exceptn.h>
 #include <botan/internal/tls_reader.h>
 
 namespace Botan::TLS {
@@ -19,6 +20,31 @@ Encrypted_Extensions::Encrypted_Extensions(const std::vector<uint8_t>& buf)
    TLS_Data_Reader reader("encrypted extensions reader", buf);
 
    m_extensions.deserialize(reader, Connection_Side::SERVER, type());
+
+   // RFC 8446 4.2
+   //    If an implementation receives an extension which it recognizes and
+   //    which is not specified for the message in which it appears, it MUST
+   //    abort the handshake with an "illegal_parameter" alert.
+   //
+   // Note that we cannot encounter any extensions that we don't recognize here,
+   // since only extensions we previously offered are allowed in EE.
+   const auto allowed_exts = std::set<Handshake_Extension_Type>{
+      Handshake_Extension_Type::TLSEXT_SERVER_NAME_INDICATION,
+      // MAX_FRAGMENT_LENGTH
+      Handshake_Extension_Type::TLSEXT_SUPPORTED_GROUPS,
+      Handshake_Extension_Type::TLSEXT_USE_SRTP,
+      // HEARTBEAT
+      Handshake_Extension_Type::TLSEXT_ALPN,
+      // CLIENT_CERTIFICATE_TYPE
+      // SERVER_CERTIFICATE_TYPE
+      // EARLY_DATA
+      // not listed in RFC 8446, but acceptable as we implement them
+      Handshake_Extension_Type::TLSEXT_RECORD_SIZE_LIMIT,
+   };
+   if(m_extensions.contains_other_than(allowed_exts))
+      { throw TLS_Exception(Alert::ILLEGAL_PARAMETER,
+            "Encrypted Extensions contained an extension that is not allowed"); }
+
    }
 
 }
