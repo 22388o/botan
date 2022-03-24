@@ -243,6 +243,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Unknown TLS handshake message type 62", ":UNEXPECTED_MESSAGE:" },
          { "Unknown TLS handshake message type 64", ":UNEXPECTED_MESSAGE:" },
          { "Unknown handshake message received", ":UNEXPECTED_MESSAGE:" },
+         { "Unknown post-handshake message received", ":UNEXPECTED_MESSAGE:" },
          { "signature_algorithm_of_scheme: Unknown signature algorithm enum", ":WRONG_SIGNATURE_TYPE:" },
          { "Unexpected session ID during downgrade", ":SERVER_ECHOED_INVALID_SESSION_ID:" },
       };
