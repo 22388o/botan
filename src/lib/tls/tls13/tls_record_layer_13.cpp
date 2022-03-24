@@ -170,9 +170,12 @@ std::vector<uint8_t> Record_Layer::prepare_records(const Record_Type type,
    auto output_length = records * TLS_HEADER_SIZE;
    if(protect)
       {
-      output_length += cipher_state->encrypt_output_length(MAX_PLAINTEXT_SIZE + 1 /* for content type byte */) *
-                       (records - 1);
-      output_length += cipher_state->encrypt_output_length(data.size() % MAX_PLAINTEXT_SIZE + 1);
+      // n-1 full records of size MAX_PLAINTEXT_SIZE
+      output_length +=
+         (records - 1) * cipher_state->encrypt_output_length(MAX_PLAINTEXT_SIZE + 1 /* for content type byte */);
+      // last record with size of remaining data
+      output_length +=
+         cipher_state->encrypt_output_length(data.size() - ((records-1) * MAX_PLAINTEXT_SIZE) + 1);
       }
    else
       {
@@ -202,7 +205,6 @@ std::vector<uint8_t> Record_Layer::prepare_records(const Record_Type type,
       const auto record_header = TLSPlaintext_Header(pt_type, ct_size, use_compatibility_version).serialized;
       m_first_sent_record = false;
 
-      output.reserve(output.size() + record_header.size() + ct_size);
       output.insert(output.end(), record_header.cbegin(), record_header.cend());
 
       if(protect)
