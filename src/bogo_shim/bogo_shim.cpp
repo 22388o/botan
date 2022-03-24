@@ -188,7 +188,8 @@ std::string map_to_bogo_error(const std::string& e)
          { "protected change cipher spec received", ":UNEXPECTED_RECORD:" },
          { "Server sent an unsupported extension", ":UNEXPECTED_EXTENSION:" },
          { "Unexpected extension received", ":UNEXPECTED_EXTENSION:" },
-         { "extension was not offered", ":UNEXPECTED_EXTENSION:" },
+         { "Unsupported extension found in Server Hello or Hello Retry Request", ":UNEXPECTED_EXTENSION:" },
+         { "Unsupported extension found in Encrypted Extensions", ":UNEXPECTED_EXTENSION:" },
          { "server hello must contain key exchange information", ":MISSING_KEY_SHARE:"},
          { "Peer sent duplicated extensions", ":DUPLICATE_EXTENSION:" },
          { "Server sent bad values for secure renegotiation", ":RENEGOTIATION_MISMATCH:" },
@@ -1091,7 +1092,10 @@ class Shim_Policy final : public Botan::TLS::Policy
                  "SendServerHelloAsHelloRetryRequest",
                  "TrailingMessageData-ServerHello-TLS",
                  "NoSSL3-Client-Unsolicited",
-                 "Client-TooLongSessionID"};
+                 "Client-TooLongSessionID",
+                 "MinimumVersion-Client-TLS13-TLS12-TLS",
+                 "MinimumVersion-Client2-TLS13-TLS12-TLS",
+         };
          if(Botan::value_exists(alert_after_server_hello, m_args.test_name()))
             return false;
 

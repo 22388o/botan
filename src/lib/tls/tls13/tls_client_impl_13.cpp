@@ -146,7 +146,7 @@ void validate_server_hello_ish(const Client_Hello_13& ch, const Server_Hello_13&
       {
       if(ext_type != TLSEXT_COOKIE && ch.extensions().extension_types().count(ext_type) == 0)
          {
-         throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION, "extension was not offered");
+         throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION, "Unsupported extension found in Server Hello or Hello Retry Request");
          }
       }
    }
@@ -313,7 +313,17 @@ void Client_Impl_13::handle(const Hello_Retry_Request& hrr)
 
 void Client_Impl_13::handle(const Encrypted_Extensions& encrypted_extensions_msg)
    {
-   // TODO: check all extensions are allowed and expected
+   // RFC 8446 4.2
+   //    Implementations MUST NOT send extension responses if the remote
+   //    endpoint did not send the corresponding extension requests, with the
+   //    exception of the "cookie" extension in the HelloRetryRequest.  Upon
+   //    receiving such an extension, an endpoint MUST abort the handshake
+   //    with an "unsupported_extension" alert.
+   for(auto ext_type : encrypted_extensions_msg.extensions().extension_types())
+      {
+      if(m_handshake_state.client_hello().extensions().extension_types().count(ext_type) == 0)
+         { throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION, "Unsupported extension found in Encrypted Extensions"); }
+      }
 
    // Note: As per RFC 6066 3. we can check for an empty SNI extensions to
    // determine if the server used the SNI we sent here.

@@ -513,7 +513,8 @@ Client_Hello_13::Client_Hello_13(const Policy& policy,
       }
 
    // TODO: check when to set these -- setting for rfc8448 now
-   m_extensions.add(new Server_Name_Indicator(client_settings.hostname()));
+   if(!client_settings.hostname().empty())
+      { m_extensions.add(new Server_Name_Indicator(client_settings.hostname())); }
 
    m_extensions.add(new Renegotiation_Extension());
 
