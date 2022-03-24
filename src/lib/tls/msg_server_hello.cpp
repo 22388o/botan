@@ -489,7 +489,8 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
    //    In TLS 1.3, [...] the legacy_version field MUST be set to 0x0303
    if(legacy_version() != Protocol_Version::TLS_V12)
       {
-      throw TLS_Exception(Alert::PROTOCOL_VERSION, "legacy_version must be set to 1.2 in TLS 1.3");
+      throw TLS_Exception(Alert::PROTOCOL_VERSION,
+                          "legacy_version '" + legacy_version().to_string() + "' is not allowed");
       }
 
    // RFC 8446 4.1.3

@@ -169,7 +169,8 @@ std::string map_to_bogo_error(const std::string& e)
          { "Server replied with ciphersuite we didn't send", ":WRONG_CIPHER_RETURNED:" },
          { "Server replied with an invalid version", ":UNSUPPORTED_PROTOCOL:" },  // bogus version from "ServerBogusVersion"
          { "Server version SSL v3 is unacceptable by policy", ":UNSUPPORTED_PROTOCOL:" },  // "NoSSL3-Client-Unsolicited"
-         { "legacy_version must be set to 1.2 in TLS 1.3", ":UNSUPPORTED_PROTOCOL:" },  // bogus version from "ServerBogusVersion"
+         { "legacy_version 'TLS v1.4' is not allowed", ":DECODE_ERROR:" },
+         { "legacy_version 'Unknown 18.52' is not allowed", ":UNSUPPORTED_PROTOCOL:" },
          { "Server replied with non-null compression method", ":UNSUPPORTED_COMPRESSION_ALGORITHM:" },
          { "Server replied with some unknown ciphersuite", ":UNKNOWN_CIPHER_RETURNED:" },
          { "Server replied with unsupported extensions: 0", ":UNEXPECTED_EXTENSION:" },
