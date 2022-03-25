@@ -449,6 +449,8 @@ std::vector<uint8_t> Server_Hello_Done::serialize() const
 
 #if defined(BOTAN_HAS_TLS_13)
 
+Server_Hello_13::Server_Hello_Tag Server_Hello_13::as_server_hello;
+Server_Hello_13::Hello_Retry_Request_Tag Server_Hello_13::as_hello_retry_request;
 
 std::variant<Hello_Retry_Request, Server_Hello_13, Server_Hello_12>
 Server_Hello_13::parse(const std::vector<uint8_t>& buf)
