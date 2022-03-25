@@ -131,8 +131,9 @@ Certificate_13::Certificate_13(const std::vector<uint8_t>& buf,
       // RFC 8446 4.4.2
       //    Valid extensions for server certificates at present include the
       //    OCSP Status extension [RFC6066] and the SignedCertificateTimestamp
-      //    extension [RFC6962]
-      if(entry.extensions.contains_other_than({
+      //    extension [RFC6962]; future extensions may be defined for this
+      //    message as well.
+      if(entry.extensions.contains_implemented_extensions_other_than({
             TLSEXT_CERT_STATUS_REQUEST,
             // SIGNED_CERTIFICATE_TIMESTAMP
          }))

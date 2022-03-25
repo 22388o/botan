@@ -123,7 +123,8 @@ void Extensions::deserialize(TLS_Data_Reader& reader,
       }
    }
 
-bool Extensions::contains_other_than(const std::set<Handshake_Extension_Type>& allowed_extensions) const
+bool Extensions::contains_other_than(const std::set<Handshake_Extension_Type>& allowed_extensions,
+                                     const bool allow_unknown_extensions) const
    {
    const auto found = extension_types();
 
@@ -131,6 +132,22 @@ bool Extensions::contains_other_than(const std::set<Handshake_Extension_Type>& a
    std::set_difference(found.cbegin(), found.end(),
                        allowed_extensions.cbegin(), allowed_extensions.cend(),
                        std::back_inserter(diff));
+
+   if(allow_unknown_extensions)
+      {
+      // Go through the found unexpected extensions whether any of those
+      // is known to this TLS implementation.
+      const auto itr = std::find_if(diff.cbegin(), diff.cend(),
+                                    [this](const auto ext_type)
+         {
+         const auto ext = get(ext_type);
+         return ext && ext->is_implemented();
+         });
+
+      // ... if yes, `contains_other_than` is true
+      return itr != diff.cend();
+      }
+
    return !diff.empty();
    }
 

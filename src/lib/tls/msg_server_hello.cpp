@@ -530,6 +530,9 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
       }
 
    // RFC 8446 4.1.3
+   //    The ServerHello MUST only include extensions which are required to
+   //    establish the cryptographic context and negotiate the protocol version.
+   //    [...]
    //    Other extensions (see Section 4.2) are sent separately in the
    //    EncryptedExtensions message.
    //
@@ -547,6 +550,8 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
    if(m_data->is_hello_retry_request)
       allowed.insert(TLSEXT_COOKIE);
 
+   // As the ServerHello shall only contain essential extensions, we don't give
+   // any slack for extensions not implemented by Botan here.
    if(exts.contains_other_than(allowed))
       {
       throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,

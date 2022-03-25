@@ -96,6 +96,11 @@ class BOTAN_UNSTABLE_API Extension
       */
       virtual bool empty() const = 0;
 
+      /**
+       * @return true if this extension is known and implemented by Botan
+       */
+      virtual bool is_implemented() const { return true; }
+
       virtual ~Extension() = default;
    };
 
@@ -668,6 +673,8 @@ class BOTAN_UNSTABLE_API Unknown_Extension final : public Extension
 
       Handshake_Extension_Type type() const override { return m_type; }
 
+      bool is_implemented() const override { return false; }
+
    private:
       Handshake_Extension_Type m_type;
       std::vector<uint8_t> m_value;
@@ -727,9 +734,22 @@ class BOTAN_UNSTABLE_API Extensions final
                        const Handshake_Type message_type);
 
       /**
+       * @param allowed_extensions        extension types that are allowed
+       * @param allow_unknown_extensions  if true, ignores unrecognized extensions
        * @returns true if this contains any extensions that are not contained in @p allowed_extensions.
        */
-      bool contains_other_than(const std::set<Handshake_Extension_Type>& allowed_extensions) const;
+      bool contains_other_than(const std::set<Handshake_Extension_Type>& allowed_extensions,
+                               const bool allow_unknown_extensions = false) const;
+
+      /**
+       * @param allowed_extensions  extension types that are allowed
+       * @returns true if this contains any extensions implemented by Botan that
+       *          are not contained in @p allowed_extensions.
+       */
+      bool contains_implemented_extensions_other_than(const std::set<Handshake_Extension_Type>& allowed_extensions) const
+         {
+         return contains_other_than(allowed_extensions, true);
+         }
 
       /**
        * Take the extension with the given type out of the extensions list.

@@ -210,16 +210,6 @@ void Client_Impl_13::handle(const Server_Hello_13& sh)
 
    const auto& ch = m_handshake_state.client_hello();
 
-   // TODO: have another close look at this once we start implementing
-   //       protocol downgrade!
-   if(auto requested = sh.random_signals_downgrade())
-      {
-      if(requested.value() == Protocol_Version::TLS_V11)
-         { throw TLS_Exception(Alert::PROTOCOL_VERSION, "TLS 1.1 is not supported"); }
-      if(requested.value() == Protocol_Version::TLS_V12)
-         { throw Not_Implemented("downgrade is nyi"); }
-      }
-
    validate_server_hello_ish(ch, sh);
 
    // RFC 8446 4.2

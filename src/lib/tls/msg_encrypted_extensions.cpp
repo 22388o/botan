@@ -43,7 +43,7 @@ Encrypted_Extensions::Encrypted_Extensions(const std::vector<uint8_t>& buf)
       // Allowed extensions not listed in RFC 8446 but acceptable as Botan implements them
       Handshake_Extension_Type::TLSEXT_RECORD_SIZE_LIMIT,
    };
-   if(m_extensions.contains_other_than(allowed_exts))
+   if(m_extensions.contains_implemented_extensions_other_than(allowed_exts))
       { throw TLS_Exception(Alert::ILLEGAL_PARAMETER,
             "Encrypted Extensions contained an extension that is not allowed"); }
 
