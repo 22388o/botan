@@ -8,6 +8,7 @@
 #define BOTAN_TLS_ALGO_IDS_H_
 
 #include <botan/types.h>
+#include <botan/asn1_obj.h>
 #include <string>
 #include <vector>
 
@@ -114,6 +115,7 @@ std::string BOTAN_UNSTABLE_API sig_scheme_to_string(Signature_Scheme scheme);
 std::string BOTAN_UNSTABLE_API hash_function_of_scheme(Signature_Scheme scheme);
 std::string BOTAN_UNSTABLE_API padding_string_for_scheme(Signature_Scheme scheme);
 std::string signature_algorithm_of_scheme(Signature_Scheme scheme);
+AlgorithmIdentifier algorithm_identifier_for_scheme(Signature_Scheme scheme);
 
 /*
 * Matches with wire encoding

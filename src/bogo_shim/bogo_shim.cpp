@@ -191,7 +191,6 @@ std::string map_to_bogo_error(const std::string& e)
          { "protected change cipher spec received", ":UNEXPECTED_RECORD:" },
          { "Server sent an unsupported extension", ":UNEXPECTED_EXTENSION:" },
          { "Unexpected extension received", ":UNEXPECTED_EXTENSION:" },
-         { "Server Hello contained an extension that is not allowed", ":UNEXPECTED_EXTENSION:" },
          { "server hello must contain key exchange information", ":MISSING_KEY_SHARE:"},
          { "Peer sent duplicated extensions", ":DUPLICATE_EXTENSION:" },
          { "Server sent bad values for secure renegotiation", ":RENEGOTIATION_MISMATCH:" },
@@ -249,9 +248,11 @@ std::string map_to_bogo_error(const std::string& e)
          { "Unexpected session ID during downgrade", ":SERVER_ECHOED_INVALID_SESSION_ID:" },
          { "Encrypted Extensions contained an extension that is not allowed", ":ERROR_PARSING_EXTENSION:" },
          { "Encrypted Extensions contained an extension that was not offered", ":UNEXPECTED_EXTENSION:" },
-         { "Server Hello or Hello Retry Request contained an extension that is not allowed", ":UNEXPECTED_EXTENSION:" },
-         { "Certificate Entry contained an extension that is not allowed",":UNEXPECTED_EXTENSION:" },
-         { "Certificate Entry contained an extension that was not offered",":UNEXPECTED_EXTENSION:" },
+         { "Certificate Entry contained an extension that is not allowed", ":UNEXPECTED_EXTENSION:" },
+         { "Certificate Entry contained an extension that was not offered", ":UNEXPECTED_EXTENSION:" },
+         { "Server Hello contained an extension that is not allowed", ":UNEXPECTED_EXTENSION:" },
+         { "Hello Retry Request contained an extension that is not allowed", ":UNEXPECTED_EXTENSION:" },
+         { "Signature algorithm does not match certificate's public key", ":WRONG_SIGNATURE_TYPE:" },
       };
 
    auto err_map_i = err_map.find(e);

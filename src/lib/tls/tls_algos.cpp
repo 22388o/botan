@@ -4,6 +4,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
+#include <botan/ec_group.h>
+#include <botan/oids.h>
 #include <botan/tls_algos.h>
 #include <botan/exceptn.h>
 
@@ -100,7 +102,7 @@ Auth_Method auth_method_from_string(const std::string& str)
       return Auth_Method::IMPLICIT;
    if(str == "UNDEFINED")
       return Auth_Method::UNDEFINED;
-      
+
    throw Invalid_Argument("Bad signature method " + str);
    }
 
@@ -176,6 +178,41 @@ std::string group_param_to_string(Group_Params group)
       }
    }
 
+AlgorithmIdentifier algorithm_identifier_for_scheme(Signature_Scheme scheme)
+   {
+   switch(scheme)
+      {
+      case Signature_Scheme::ECDSA_SHA256:
+         return { "ECDSA", EC_Group("secp256r1").DER_encode(EC_Group_Encoding::NamedCurve) };
+      case Signature_Scheme::ECDSA_SHA384:
+         return { "ECDSA", EC_Group("secp384r1").DER_encode(EC_Group_Encoding::NamedCurve) };
+      case Signature_Scheme::ECDSA_SHA512:
+         return { "ECDSA", EC_Group("secp521r1").DER_encode(EC_Group_Encoding::NamedCurve) };
+
+      case Signature_Scheme::EDDSA_25519:
+         return { "Ed25519", AlgorithmIdentifier::USE_EMPTY_PARAM };
+
+      case Signature_Scheme::RSA_PKCS1_SHA256:
+      case Signature_Scheme::RSA_PKCS1_SHA384:
+      case Signature_Scheme::RSA_PKCS1_SHA512:
+      case Signature_Scheme::RSA_PSS_SHA256:
+      case Signature_Scheme::RSA_PSS_SHA384:
+      case Signature_Scheme::RSA_PSS_SHA512:
+         return { "RSA", AlgorithmIdentifier::USE_NULL_PARAM };
+
+      case Signature_Scheme::NONE:
+      case Signature_Scheme::EDDSA_448:
+      case Signature_Scheme::RSA_PKCS1_SHA1:
+      case Signature_Scheme::ECDSA_SHA1:
+      case Signature_Scheme::DSA_SHA1:
+      case Signature_Scheme::DSA_SHA256:
+      case Signature_Scheme::DSA_SHA384:
+      case Signature_Scheme::DSA_SHA512:
+         throw Invalid_State("oid_for_scheme: Unsupported signature scheme");
+      }
+
+      Botan::unreachable();
+   }
 
 std::string hash_function_of_scheme(Signature_Scheme scheme)
    {

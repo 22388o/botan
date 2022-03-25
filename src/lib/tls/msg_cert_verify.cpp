@@ -11,6 +11,7 @@
 #include <botan/internal/tls_handshake_state.h>
 #include <botan/internal/tls_reader.h>
 #include <botan/pk_keys.h>
+#include <botan/tls_algos.h>
 #include <botan/tls_extensions.h>
 #include <botan/tls_messages.h>
 
@@ -202,6 +203,12 @@ bool Certificate_Verify_13::verify(const X509_Certificate& cert,
    // TODO: won't work for client auth
    std::pair<std::string, Signature_Format> format =
       parse_sig_format(key->algo_name(), m_scheme, offered_schemes);
+
+   // RFC 8446 4.2.3
+   //    The keys found in certificates MUST [...] be of appropriate type for
+   //    the signature algorithms they are used with.
+   if(algorithm_identifier_for_scheme(m_scheme) != cert.subject_public_key_algo())
+      { throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Signature algorithm does not match certificate's public key"); }
 
    std::vector<uint8_t> msg(64, 0x20);
    msg.reserve(64 + 32 + 1 + transcript_hash.size());

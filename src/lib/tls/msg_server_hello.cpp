@@ -541,16 +541,6 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data,
    const auto& exts = extensions();
 
    // RFC 8446 4.1.3
-   //    Current ServerHello messages additionally contain
-   //    either the "pre_shared_key" extension or the "key_share"
-   //    extension, or both [...].
-   if(!exts.has<Key_Share>() && !exts.has<PSK_Key_Exchange_Modes>())
-      {
-      throw TLS_Exception(Alert::MISSING_EXTENSION,
-                          "server hello must contain key exchange information");
-      }
-
-   // RFC 8446 4.1.3
    //    The ServerHello MUST only include extensions which are required to
    //    establish the cryptographic context and negotiate the protocol version.
    //    [...]
@@ -573,6 +563,16 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data,
       throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
                           "Server Hello contained an extension that is not allowed");
       }
+
+   // RFC 8446 4.1.3
+   //    Current ServerHello messages additionally contain
+   //    either the "pre_shared_key" extension or the "key_share"
+   //    extension, or both [...].
+   if(!exts.has<Key_Share>() && !exts.has<PSK_Key_Exchange_Modes>())
+      {
+      throw TLS_Exception(Alert::MISSING_EXTENSION,
+                          "server hello must contain key exchange information");
+      }
    }
 
 Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data, Server_Hello_13::Hello_Retry_Request_Tag)
@@ -582,15 +582,6 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data, S
    basic_validation();
 
    const auto& exts = extensions();
-
-   // RFC 8446 4.1.4
-   //    Clients MUST abort the handshake with an "illegal_parameter" alert if
-   //    the HelloRetryRequest would not result in any change in the ClientHello.
-   if(!exts.has<Key_Share>() && !exts.has<Cookie>())
-      {
-      throw TLS_Exception(Alert::ILLEGAL_PARAMETER,
-                          "Hello Retry Request does not request any changes to Client Hello");
-      }
 
    // RFC 8446 4.1.4
    //     The HelloRetryRequest extensions defined in this specification are:
@@ -610,6 +601,15 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data, S
       {
       throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
                           "Hello Retry Request contained an extension that is not allowed");
+      }
+
+   // RFC 8446 4.1.4
+   //    Clients MUST abort the handshake with an "illegal_parameter" alert if
+   //    the HelloRetryRequest would not result in any change in the ClientHello.
+   if(!exts.has<Key_Share>() && !exts.has<Cookie>())
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER,
+                          "Hello Retry Request does not request any changes to Client Hello");
       }
    }
 

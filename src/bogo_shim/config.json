@@ -35,6 +35,7 @@
 
         "Client-RejectJDK11DowngradeRandom": "We don't implement this workaround",
         "ExportTrafficSecrets-*": "Exporting traffic secrets is not implemented",
+        "HelloRetryRequest-Unknown-TLS13": "Limits on the number of CCS are not implemented",
 
         "CertificateVerificationSucceed-Client-TLS13-*" : "TLS 1.3 session resumption is NYI",
         "Client-VerifyDefault-*-TLS13" : "TLS 1.3 session resumption is NYI",
@@ -57,6 +58,8 @@
         "OCSPStapling-Client-TLS13-*" : "TLS 1.3 session resumption is NYI",
         "Resume-Client-NoResume-TLS12-TLS13-TLS": "TLS 1.3 session resumption is NYI",
         "Resume-Client-Mismatch-TLS12-TLS13-TLS": "TLS 1.3 session resumption is NYI",
+        "Ticket-Forbidden-TLS13": "TLS 1.3 session resumption is NYI",
+        "Resume-Client-PRFMismatch-TLS13": "TLS 1.3 session resumption is NYI",
 
         "KeyUpdate-FromServer": "No TLS 1.3 server, yet",
         "FragmentedClientVersion": "No TLS 1.3 server, yet",
