@@ -92,6 +92,7 @@ std::string map_to_bogo_error(const std::string& e)
          { "Bad size (1) for TLS alert message", ":BAD_ALERT:" },
          { "Bad size (4) for TLS alert message", ":BAD_ALERT:" },
          { "CERTIFICATE decoding failed with PEM: No PEM header found", ":CANNOT_PARSE_LEAF_CERT:" },
+         { "Certificate usage constraints do not allow signing", ":KEY_USAGE_BIT_INCORRECT:" },
          { "Can't agree on a ciphersuite with client", ":NO_SHARED_CIPHER:" },
          { "Can't interleave application and handshake data", ":UNEXPECTED_RECORD:" },
          { "Certificate chain exceeds policy specified maximum size", ":EXCESSIVE_MESSAGE_SIZE:" },

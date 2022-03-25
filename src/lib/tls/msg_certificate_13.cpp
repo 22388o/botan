@@ -22,6 +22,19 @@
 
 namespace Botan::TLS {
 
+namespace {
+
+bool certificate_allows_signing(const X509_Certificate& cert)
+   {
+   const auto constraints = cert.constraints();
+   if(constraints == NO_CONSTRAINTS)
+      return true;
+
+   return constraints & DIGITAL_SIGNATURE || constraints & NON_REPUDIATION;
+   }
+
+}
+
 void Certificate_13::validate_extensions(const std::set<Handshake_Extension_Type>& requested_extensions) const
    {
    // RFC 8446 4.4.2
@@ -64,6 +77,13 @@ void Certificate_13::verify(Callbacks& callbacks,
             //       see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
             { ocsp_responses.push_back(std::make_optional<OCSP::Response>()); }
          }
+      }
+
+   const auto& server_cert = m_entries.front().certificate;
+   if(!certificate_allows_signing(server_cert))
+      {
+      throw TLS_Exception(Alert::BAD_CERTIFICATE,
+         "Certificate usage constraints do not allow signing");
       }
 
    const auto usage = (m_side == CLIENT) ? Usage_Type::TLS_CLIENT_AUTH : Usage_Type::TLS_SERVER_AUTH;
