@@ -19,6 +19,15 @@ Encrypted_Extensions::Encrypted_Extensions(const std::vector<uint8_t>& buf)
    {
    TLS_Data_Reader reader("encrypted extensions reader", buf);
 
+   // Encrypted Extensions contains a list of extensions. This list may legally
+   // be empty. However, in that case we should at least see a two-byte length
+   // field that reads 0x00 0x00.
+   if(buf.size() < 2)
+      {
+      throw TLS_Exception(Alert::DECODE_ERROR,
+                          "Server sent an empty Encrypted Extensions message");
+      }
+
    m_extensions.deserialize(reader, Connection_Side::SERVER, type());
 
    // RFC 8446 4.2
