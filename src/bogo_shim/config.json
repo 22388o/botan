@@ -16,6 +16,13 @@
     },
 
     "DisabledTests": {
+        "ALPNClient-TLS-TLS13": "disable for the weekend",
+        "ALPNClient-AllowUnknown-TLS-TLS13": "disable for the weekend",
+        "ALPNClient-RejectUnknown-TLS-TLS13": "disable for the weekend",
+        "SendWarningAlerts-TLS13": "disable for the weekend",
+        "TLS13-WrongOuterRecord": "disable for the weekend",
+
+
         "*TLS1": "No TLS 1.0",
         "*-TLS1-*": "No TLS 1.0",
         "*-TLS10-*": "No TLS 1.0",
