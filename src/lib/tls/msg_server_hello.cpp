@@ -533,7 +533,7 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
    //    Other extensions (see Section 4.2) are sent separately in the
    //    EncryptedExtensions message.
    //
-   // Note that more detailed validation is done in the specific
+   // Note that further validation dependent on the client hello is done in the
    // TLS client implementation.
    std::set<Handshake_Extension_Type> allowed = {
       TLSEXT_KEY_SHARE,
@@ -554,7 +554,6 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
       }
    }
 
-// TODO: this should have a specific implementation for 1.2/1.3
 std::optional<Protocol_Version> Server_Hello_13::random_signals_downgrade() const
    {
    const uint64_t last8 = load_be<uint64_t>(m_data->random.data(), 3);

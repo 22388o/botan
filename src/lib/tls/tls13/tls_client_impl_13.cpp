@@ -108,38 +108,6 @@ bool Client_Impl_13::handshake_finished() const
    return m_handshake_state.handshake_finished();
    }
 
-namespace  {
-// validate Server_Hello and Hello_Retry_Request
-void validate_server_hello_ish(const Client_Hello_13& ch, const Server_Hello_13& sh)
-   {
-   // RFC 8446 4.1.3
-   //    A client which receives a legacy_session_id_echo field that does not match what
-   //    it sent in the ClientHello MUST abort the handshake with an "illegal_parameter" alert.
-   if(ch.session_id() != sh.session_id())
-      {
-      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "echoed session id did not match");
-      }
-
-   // RFC 8446 4.1.3
-   //    A client which receives a cipher suite that was not offered MUST abort the handshake
-   //    with an "illegal_parameter" alert.
-   if(!ch.offered_suite(sh.ciphersuite()))
-      {
-      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Server replied with ciphersuite we didn't send");
-      }
-
-   // RFC 8446 4.2.1
-   //    If the "supported_versions" extension in the ServerHello contains a
-   //    version not offered by the client or contains a version prior to
-   //    TLS 1.3, the client MUST abort the handshake with an "illegal_parameter" alert.
-   BOTAN_ASSERT_NOMSG(ch.extensions().has<Supported_Versions>());
-   if(!ch.extensions().get<Supported_Versions>()->supports(sh.selected_version()))
-      {
-      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol version was not offered");
-      }
-   }
-}
-
 void Client_Impl_13::handle(const Server_Hello_12& server_hello_msg)
    {
    if(m_handshake_state.has_hello_retry_request())
@@ -148,9 +116,15 @@ void Client_Impl_13::handle(const Server_Hello_12& server_hello_msg)
       }
 
    // RFC 8446 4.1.3
+   //    TLS 1.3 has a downgrade protection mechanism embedded in the server's
+   //    random value.  TLS 1.3 servers which negotiate TLS 1.2 or below in
+   //    response to a ClientHello MUST set the last 8 bytes of their Random
+   //    value specially in their ServerHello.
+   //
    //    TLS 1.3 clients receiving a ServerHello indicating TLS 1.2 or below
-   //    MUST check that the last 8 bytes are not equal to either [the TLS 1.2
-   //    or TLS 1.1 indicator].
+   //    MUST check that the [downgrade indication is not set]. [...] If a match
+   //    is found, the client MUST abort the handshake with an
+   //    "illegal_parameter" alert.
    if(server_hello_msg.random_signals_downgrade().has_value())
       {
       throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Downgrade attack detected");
@@ -195,6 +169,40 @@ void Client_Impl_13::handle(const Server_Hello_12& server_hello_msg)
    m_transitions.set_expected_next({});
    }
 
+namespace  {
+// validate Server_Hello_13 and Hello_Retry_Request
+void validate_server_hello_ish(const Client_Hello_13& ch, const Server_Hello_13& sh)
+   {
+   // RFC 8446 4.1.3
+   //    A client which receives a legacy_session_id_echo field that does not match what
+   //    it sent in the ClientHello MUST abort the handshake with an "illegal_parameter" alert.
+   if(ch.session_id() != sh.session_id())
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "echoed session id did not match");
+      }
+
+   // RFC 8446 4.1.3
+   //    A client which receives a cipher suite that was not offered MUST abort the handshake
+   //    with an "illegal_parameter" alert.
+   if(!ch.offered_suite(sh.ciphersuite()))
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Server replied with ciphersuite we didn't send");
+      }
+
+   // RFC 8446 4.2.1
+   //    If the "supported_versions" extension in the ServerHello contains a
+   //    version not offered by the client or contains a version prior to
+   //    TLS 1.3, the client MUST abort the handshake with an "illegal_parameter" alert.
+   //
+   // Note: Server_Hello_13 parsing checks that its selected version is TLS 1.3
+   BOTAN_ASSERT_NOMSG(ch.extensions().has<Supported_Versions>());
+   if(!ch.extensions().get<Supported_Versions>()->supports(sh.selected_version()))
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "Protocol version was not offered");
+      }
+   }
+}
+
 void Client_Impl_13::handle(const Server_Hello_13& sh)
    {
    // Note: Basic checks (that do not require contextual information) were already
@@ -214,6 +222,11 @@ void Client_Impl_13::handle(const Server_Hello_13& sh)
 
    validate_server_hello_ish(ch, sh);
 
+   // RFC 8446 4.2
+   //    Implementations MUST NOT send extension responses if the remote
+   //    endpoint did not send the corresponding extension requests, [...]. Upon
+   //    receiving such an extension, an endpoint MUST abort the handshake
+   //    with an "unsupported_extension" alert.
    if(sh.extensions().contains_other_than(ch.extensions().extension_types()))
       {
       throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION, "Unsupported extension found in Server Hello");
@@ -319,8 +332,7 @@ void Client_Impl_13::handle(const Encrypted_Extensions& encrypted_extensions_msg
    {
    // RFC 8446 4.2
    //    Implementations MUST NOT send extension responses if the remote
-   //    endpoint did not send the corresponding extension requests, with the
-   //    exception of the "cookie" extension in the HelloRetryRequest.  Upon
+   //    endpoint did not send the corresponding extension requests, [...]. Upon
    //    receiving such an extension, an endpoint MUST abort the handshake
    //    with an "unsupported_extension" alert.
    const auto& requested_exts = m_handshake_state.client_hello().extensions().extension_types();
