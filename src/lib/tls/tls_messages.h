@@ -392,7 +392,12 @@ class Hello_Retry_Request;
 class BOTAN_UNSTABLE_API Server_Hello_13 : public Server_Hello
    {
    protected:
-      explicit Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data);
+      static struct Server_Hello_Tag {} as_server_hello;
+      static struct Hello_Retry_Request_Tag {} as_hello_retry_request;
+
+      explicit Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data, Server_Hello_Tag tag = as_server_hello);
+      explicit Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data, Hello_Retry_Request_Tag tag);
+      void basic_validation() const;
 
    public:
       static std::variant<Hello_Retry_Request, Server_Hello_13, Server_Hello_12>

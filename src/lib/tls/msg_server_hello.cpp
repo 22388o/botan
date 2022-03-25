@@ -36,7 +36,7 @@ const std::array<uint8_t, 32> HELLO_RETRY_REQUEST_MARKER =
    0x07, 0x9E, 0x09, 0xE2, 0xC8, 0xA8, 0x33, 0x9C
    };
 
-bool random_signals_hello_retry_request(const std::vector<uint8_t> &random)
+bool random_signals_hello_retry_request(const std::vector<uint8_t>& random)
    {
    return constant_time_compare(random.data(), HELLO_RETRY_REQUEST_MARKER.data(), HELLO_RETRY_REQUEST_MARKER.size());
    }
@@ -88,8 +88,8 @@ Server_Hello::Internal::Internal(const std::vector<uint8_t>& buf)
    // whether we're dealing with TLS 1.3 or older.
    extensions.deserialize(reader, Connection_Side::SERVER,
                           is_hello_retry_request
-                              ? Handshake_Type::HELLO_RETRY_REQUEST
-                              : Handshake_Type::SERVER_HELLO);
+                          ? Handshake_Type::HELLO_RETRY_REQUEST
+                          : Handshake_Type::SERVER_HELLO);
    }
 
 
@@ -117,8 +117,8 @@ Protocol_Version Server_Hello::Internal::version() const
    // Note: Here we just take a message parsing decision, further validation of
    //       the extension's contents is done later.
    return (extensions.has<Supported_Versions>())
-      ? Protocol_Version::TLS_V13
-      : legacy_version;
+          ? Protocol_Version::TLS_V13
+          : legacy_version;
    }
 
 
@@ -197,11 +197,11 @@ Server_Hello_12::Server_Hello_12(Handshake_IO& io,
                                  const Server_Hello_12::Settings& server_settings,
                                  const std::string& next_protocol) :
    Server_Hello(std::make_unique<Server_Hello::Internal>(
-                  server_settings.protocol_version(),
-                  server_settings.session_id(),
-                  make_server_hello_random(rng, server_settings.protocol_version(), policy),
-                  server_settings.ciphersuite(),
-                  uint8_t(0)))
+                   server_settings.protocol_version(),
+                   server_settings.session_id(),
+                   make_server_hello_random(rng, server_settings.protocol_version(), policy),
+                   server_settings.ciphersuite(),
+                   uint8_t(0)))
    {
    if(client_hello.supports_extended_master_secret())
       {
@@ -281,11 +281,11 @@ Server_Hello_12::Server_Hello_12(Handshake_IO& io,
                                  bool offer_session_ticket,
                                  const std::string& next_protocol) :
    Server_Hello(std::make_unique<Server_Hello::Internal>(
-                  resumed_session.version(),
-                  client_hello.session_id(),
-                  make_hello_random(rng, policy),
-                  resumed_session.ciphersuite_code(),
-                  uint8_t(0)))
+                   resumed_session.version(),
+                   client_hello.session_id(),
+                   make_hello_random(rng, policy),
+                   resumed_session.ciphersuite_code(),
+                   uint8_t(0)))
    {
    if(client_hello.supports_extended_master_secret())
       {
@@ -327,7 +327,7 @@ Server_Hello_12::Server_Hello_12(Handshake_IO& io,
    }
 
 
-Server_Hello_12::Server_Hello_12(const std::vector<uint8_t> &buf)
+Server_Hello_12::Server_Hello_12(const std::vector<uint8_t>& buf)
    : Server_Hello_12(std::make_unique<Server_Hello::Internal>(buf))
    {}
 
@@ -436,7 +436,7 @@ Server_Hello_Done::Server_Hello_Done(Handshake_IO& io,
 Server_Hello_Done::Server_Hello_Done(const std::vector<uint8_t>& buf)
    {
    if(!buf.empty())
-      throw Decoding_Error("Server_Hello_Done: Must be empty, and is not");
+      { throw Decoding_Error("Server_Hello_Done: Must be empty, and is not"); }
    }
 
 /*
@@ -460,13 +460,13 @@ Server_Hello_13::parse(const std::vector<uint8_t>& buf)
 
    // server hello that appears to be pre-TLS 1.3, takes precedence over...
    if(version.is_pre_tls_13())
-      return Server_Hello_12(std::move(data));
+      { return Server_Hello_12(std::move(data)); }
 
    // ... the TLS 1.3 "special case" aka. Hello_Retry_Request
    if(version == Protocol_Version::TLS_V13)
       {
       if(data->is_hello_retry_request)
-         return Hello_Retry_Request(std::move(data));
+         { return Hello_Retry_Request(std::move(data)); }
 
       return Server_Hello_13(std::move(data));
       }
@@ -475,8 +475,10 @@ Server_Hello_13::parse(const std::vector<uint8_t>& buf)
                        "unexpected server hello version: " + version.to_string());
    }
 
-Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
-   : Server_Hello(std::move(data))
+/**
+ * Validation that applies to both Server Hello and Hello Retry Request
+ */
+void Server_Hello_13::basic_validation() const
    {
    BOTAN_ASSERT_NOMSG(m_data->version() == Protocol_Version::TLS_V13);
 
@@ -484,6 +486,15 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
    //       are done in the specific TLS client implementation.
    // Note: The Supported_Version extension makes sure internally that
    //       exactly one entry is provided.
+
+   // Note: Hello Retry Request basic validation is equivalent with the
+   //       basic validations required for Server Hello
+   //
+   // RFC 8446 4.1.4
+   //    Upon receipt of a HelloRetryRequest, the client MUST check the
+   //    legacy_version, [...], and legacy_compression_method as specified in
+   //    Section 4.1.3 and then process the extensions, starting with determining
+   //    the version using "supported_versions".
 
    // RFC 8446 4.1.3
    //    In TLS 1.3, [...] the legacy_version field MUST be set to 0x0303
@@ -518,6 +529,16 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
       {
       throw TLS_Exception(Alert::ILLEGAL_PARAMETER, "TLS 1.3 Server Hello selected a different version");
       }
+   }
+
+Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data,
+                                 Server_Hello_13::Server_Hello_Tag)
+   : Server_Hello(std::move(data))
+   {
+   BOTAN_ASSERT_NOMSG(!m_data->is_hello_retry_request);
+   basic_validation();
+
+   const auto& exts = extensions();
 
    // RFC 8446 4.1.3
    //    Current ServerHello messages additionally contain
@@ -538,24 +559,57 @@ Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data)
    //
    // Note that further validation dependent on the client hello is done in the
    // TLS client implementation.
-   std::set<Handshake_Extension_Type> allowed = {
+   std::set<Handshake_Extension_Type> allowed =
+      {
       TLSEXT_KEY_SHARE,
       TLSEXT_PSK_KEY_EXCHANGE_MODES,
       TLSEXT_SUPPORTED_VERSIONS,
-   };
-
-   // RFC 8446 4.2.2
-   //     When sending a HelloRetryRequest, the server MAY provide a "cookie"
-   //     extension to the client [...].
-   if(m_data->is_hello_retry_request)
-      allowed.insert(TLSEXT_COOKIE);
+      };
 
    // As the ServerHello shall only contain essential extensions, we don't give
    // any slack for extensions not implemented by Botan here.
    if(exts.contains_other_than(allowed))
       {
       throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
-            "Server Hello or Hello Retry Request contained an extension that is not allowed");
+                          "Server Hello contained an extension that is not allowed");
+      }
+   }
+
+Server_Hello_13::Server_Hello_13(std::unique_ptr<Server_Hello::Internal> data, Server_Hello_13::Hello_Retry_Request_Tag)
+   : Server_Hello(std::move(data))
+   {
+   BOTAN_ASSERT_NOMSG(m_data->is_hello_retry_request);
+   basic_validation();
+
+   const auto& exts = extensions();
+
+   // RFC 8446 4.1.4
+   //    Clients MUST abort the handshake with an "illegal_parameter" alert if
+   //    the HelloRetryRequest would not result in any change in the ClientHello.
+   if(!exts.has<Key_Share>() && !exts.has<Cookie>())
+      {
+      throw TLS_Exception(Alert::ILLEGAL_PARAMETER,
+                          "Hello Retry Request does not request any changes to Client Hello");
+      }
+
+   // RFC 8446 4.1.4
+   //     The HelloRetryRequest extensions defined in this specification are:
+   //     -  supported_versions (see Section 4.2.1)
+   //     -  cookie (see Section 4.2.2)
+   //     -  key_share (see Section 4.2.8)
+   std::set<Handshake_Extension_Type> allowed =
+      {
+      TLSEXT_COOKIE,
+      TLSEXT_SUPPORTED_VERSIONS,
+      TLSEXT_KEY_SHARE,
+      };
+
+   // As the Hello Retry Request shall only contain essential extensions, we
+   // don't give any slack for extensions not implemented by Botan here.
+   if(extensions().contains_other_than(allowed))
+      {
+      throw TLS_Exception(Alert::UNSUPPORTED_EXTENSION,
+                          "Hello Retry Request contained an extension that is not allowed");
       }
    }
 
@@ -579,12 +633,8 @@ Protocol_Version Server_Hello_13::selected_version() const
    return versions.front();
    }
 
-
 Hello_Retry_Request::Hello_Retry_Request(std::unique_ptr<Server_Hello::Internal> data)
-   : Server_Hello_13(std::move(data))
-   {
-   BOTAN_ASSERT_NOMSG(m_data->is_hello_retry_request);
-   }
+   : Server_Hello_13(std::move(data), Server_Hello_13::as_hello_retry_request) {}
 
 #endif // BOTAN_HAS_TLS_13
 

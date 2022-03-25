@@ -574,19 +574,26 @@ void Client_Hello_13::retry(const Hello_Retry_Request& hrr,
    {
    BOTAN_STATE_CHECK(m_extensions.has<Supported_Groups>());
    BOTAN_STATE_CHECK(m_extensions.has<Key_Share>());
-   BOTAN_STATE_CHECK(hrr.extensions().has<Key_Share>());
 
    auto hrr_ks = hrr.extensions().get<Key_Share>();
    const auto& supported_groups = m_extensions.get<Supported_Groups>()->groups();
 
-   m_extensions.get<Key_Share>()->retry_offer(hrr_ks, supported_groups, cb, rng);
+   if(hrr.extensions().has<Key_Share>())
+      {
+      m_extensions.get<Key_Share>()->retry_offer(hrr_ks, supported_groups, cb, rng);
+      }
 
    // RFC 8446 4.2.2
    //    When sending the new ClientHello, the client MUST copy
    //    the contents of the extension received in the HelloRetryRequest into
    //    a "cookie" extension in the new ClientHello.
+   //
+   // RFC 8446 4.2.2
+   //    Clients MUST NOT use cookies in their initial ClientHello in subsequent
+   //    connections.
    if(hrr.extensions().has<Cookie>())
       {
+      BOTAN_STATE_CHECK(!m_extensions.has<Cookie>());
       m_extensions.add(new Cookie(hrr.extensions().get<Cookie>()->get_cookie()));
       }
 
